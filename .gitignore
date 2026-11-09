@@ -1,0 +1,4 @@
+.freebuff
+bin/
+obj/
+*.jit.elf
