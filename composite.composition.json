@@ -22,7 +22,12 @@
       "ExcludedPaths": [],
       "RenamedPaths": {},
       "CollisionPolicies": {
-        "metadata.json": "Union"
+        "metadata.json": "Union",
+        "MapScript.cs": "Exclude",
+        "MapScript.csproj": "Exclude",
+        "MapTemplates.g.cs": "Exclude",
+        "WasmEntryPoint.g.cs": "Exclude",
+        "Directory.Build.targets": "Exclude"
       }
     }
   ]
