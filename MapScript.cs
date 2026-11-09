@@ -13,9 +13,11 @@ public class MapScript : IWasmModule, ILobbyScript
 
 	private const int MaximumBuildingsPerPlayer = 5;
 	private const string ConstructionAbilityId = "ability/begin_construction";
-	private const string ConstructionChoiceTopic = "begin_construction";
+	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
 	private const float BuildingWoodCost = 100f;
 	private const int DraftOptionCount = 3;
+	private const int DraftRow = 1;
+	private const int DraftAbandonSlot = 3;
 	private const int MaximumPopulation = 80;
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
@@ -130,8 +132,9 @@ public class MapScript : IWasmModule, ILobbyScript
 
 	private static readonly float[] ConstructionSecondsByProfile = { 30f, 30f, 30f, 30f, 30f, 30f, 35f, 35f, 35f };
 
+	private static readonly string[] DraftHotkeys = { "Z", "X", "C" };
+
 	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
-	private readonly int[] _draftHandles = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * DraftOptionCount];
 	private readonly float[] _draftSitePositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
@@ -188,8 +191,8 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.OnUnitDamaged += HandleUnitDamaged;
 		api.OnSpellCast += HandleSpellCast;
 		api.OnConstructionFinished += HandleConstructionFinished;
-		api.OnPlayerChoiceLocked += HandlePlayerChoiceLocked;
-		api.OnPlayerChoiceCanceled += HandlePlayerChoiceCanceled;
+
+		RegisterDraftAbilities(api);
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
 		for (int index = 0; index < players.Length; index++)
@@ -292,6 +295,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		_heroEntities[playerIndex] = hero.UniqueId;
 		api.SetUnitLevel(hero, 1);
 		ApplyInnateToUnit(api, playerIndex, hero);
+		ApplyDraftAbilityState(api, playerIndex);
 
 		player.PanCameraTo(new Vector3(anchor.X, 0f, anchor.Y), 0f);
 		player.ShowFeedbackText($"{HeroFactionNames[heroTemplateIndex]} answers the call.", new Vector3(0.85f, 0.95f, 1f));
@@ -352,6 +356,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.SetUnitLevel(hero, 1);
 		ApplyInnateToUnit(api, playerIndex, hero);
 		ApplyRelicsToUnit(api, playerIndex, hero);
+		ApplyDraftAbilityState(api, playerIndex);
 		RefillChargesForPlayer(api, player);
 
 		player.PanCameraTo(hero.Position, 0.6f);
@@ -842,6 +847,18 @@ public class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
+		if (abilityId == AbandonConstructionAbilityId)
+		{
+			AbandonOpenDraft(playerIndex);
+			return;
+		}
+
+		if (FindProfileIndexByBuilding(abilityId) >= 0)
+		{
+			LockDraftOption(playerIndex, abilityId);
+			return;
+		}
+
 		if (abilityId == "ability/requisition")
 		{
 			AdvanceActiveConstruction(playerIndex);
@@ -924,7 +941,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		PlayerId player = _api.GetPlayer(playerIndex);
 		if (!player.IsActive) return;
 
-		if (_api.HasOpenPlayerChoice(playerIndex))
+		if (_draftOpen[playerIndex] != 0)
 		{
 			player.ShowFeedbackText("Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
 			return;
@@ -949,28 +966,22 @@ public class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		var optionIds = new string[optionCount];
-		var optionLabels = new string[optionCount];
-		for (int index = 0; index < optionCount; index++)
-		{
-			string templateId = SoldierProfiles[_draftOptions[playerIndex * DraftOptionCount + index]].BuildingTemplateId;
-			optionIds[index] = templateId;
-			optionLabels[index] = _api.GetUnitName(templateId);
-		}
-
-		int handle = _api.OfferPlayerChoice(playerIndex, ConstructionChoiceTopic, "Choose a building", optionIds, optionLabels);
-		if (handle == 0)
-		{
-			player.ShowFeedbackText("The draw could not be offered.", new Vector3(1f, 0.3f, 0.25f));
-			return;
-		}
-
 		player.AdjustWood(-BuildingWoodCost);
 		_draftOpen[playerIndex] = 1;
-		_draftHandles[playerIndex] = handle;
+		_draftOptionCounts[playerIndex] = optionCount;
 		_draftSitePositionsX[playerIndex] = position.X;
 		_draftSitePositionsZ[playerIndex] = position.Z;
 
+		for (int index = 0; index < optionCount; index++)
+		{
+			string templateId = SoldierProfiles[_draftOptions[playerIndex * DraftOptionCount + index]].BuildingTemplateId;
+			_api.SetAbilityGridPosition(templateId, index, DraftRow);
+			_api.SetAbilityHotkey(templateId, DraftHotkeys[index]);
+		}
+
+		ApplyDraftAbilityState(_api, playerIndex);
+
+		player.ShowFeedbackText("Three buildings are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
 		_api.SpawnExpandingGroundRing(new Vector3(position.X, 0f, position.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
 	}
 
@@ -1030,32 +1041,110 @@ public class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Locks the building a player picked. The deck entry leaves the shared deck here rather than when it was drawn,
-		///     so an option the player declined stays available to everybody else.
+	///     Declares the abilities the draft is played through. Each drafted building is an ability whose identifier is the
+	///     building template itself, so a cast names the package the player picked without a second table to keep in step,
+	///     and every hero and Nexus can offer them in its command grid. All of them are hidden until a draw offers them.
 	/// </summary>
-	private void HandlePlayerChoiceLocked(int playerIndex, string topic, string optionId)
+	private void RegisterDraftAbilities(IGameAPI api)
 	{
-		if (topic != ConstructionChoiceTopic) return;
-		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
-		if (_draftOpen[playerIndex] == 0) return;
+		for (int index = 0; index < SoldierProfiles.Length; index++)
+		{
+			SoldierProfile profile = SoldierProfiles[index];
+			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
+			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
+			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {profile.Capacity} capacity, {profile.MaximumCharges} charges.";
 
-		_draftOpen[playerIndex] = 0;
-		_draftHandles[playerIndex] = 0;
+			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
+			AddDraftAbilityToCommandUnits(api, profile.BuildingTemplateId);
+		}
+
+		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
+		api.SetAbilityGridPosition(AbandonConstructionAbilityId, DraftAbandonSlot, DraftRow);
+		api.SetAbilityHotkey(AbandonConstructionAbilityId, "V");
+		AddDraftAbilityToCommandUnits(api, AbandonConstructionAbilityId);
+	}
+
+	private static void AddDraftAbilityToCommandUnits(IGameAPI api, string abilityId)
+	{
+		api.AddUnitTypeAbility(NexusTemplateId, abilityId);
+
+		for (int index = 0; index < HeroTemplateIds.Length; index++)
+		{
+			api.AddUnitTypeAbility(HeroTemplateIds[index], abilityId);
+		}
+	}
+
+	/// <summary>
+	///     Shows the draft on the units that carry the command grid: the hero that began the construction and the Nexus it
+	///     was begun from. Only the drawn packages and the abandon command are visible, so a player sees the three options
+	///     the deck offered and nothing else.
+	/// </summary>
+	private void ApplyDraftAbilityState(IGameAPI api, int playerIndex)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
+
+		for (int index = 0; index < SoldierProfiles.Length; index++)
+		{
+			string abilityId = SoldierProfiles[index].BuildingTemplateId;
+			bool visible = IsDraftOption(playerIndex, index);
+			SetDraftAbilityVisible(api, playerIndex, abilityId, visible);
+		}
+
+		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, _draftOpen[playerIndex] != 0);
+	}
+
+	private void SetDraftAbilityVisible(IGameAPI api, int playerIndex, string abilityId, bool visible)
+	{
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId > 0) api.SetAbilityState(new UnitId(heroEntityId), abilityId, !visible, !visible);
+
+		int nexusEntityId = _nexusEntities[playerIndex];
+		if (nexusEntityId > 0) api.SetAbilityState(new UnitId(nexusEntityId), abilityId, !visible, !visible);
+	}
+
+	private bool IsDraftOption(int playerIndex, int profileIndex)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return false;
+		if (_draftOpen[playerIndex] == 0) return false;
+
+		int optionCount = _draftOptionCounts[playerIndex];
+		for (int index = 0; index < optionCount; index++)
+		{
+			if (_draftOptions[playerIndex * DraftOptionCount + index] == profileIndex) return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	///     Locks the building a player cast from its command grid. The deck entry leaves the shared deck here rather than
+	///     when it was drawn, so an option the player declined stays available to everybody else.
+	/// </summary>
+	private void LockDraftOption(int playerIndex, string buildingTemplateId)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 
 		PlayerId player = _api.GetPlayer(playerIndex);
-		int profileIndex = FindProfileIndexByBuilding(optionId);
-		if (profileIndex < 0)
+		int profileIndex = FindProfileIndexByBuilding(buildingTemplateId);
+
+		// A building the draw did not offer is not a pick: the command only means something while that package is one of
+		// the three this player is being offered, so a cast of any other building is refused without touching the draft.
+		if (_draftOpen[playerIndex] == 0 || !IsDraftOption(playerIndex, profileIndex))
 		{
-			player.AdjustWood(BuildingWoodCost);
+			player.ShowFeedbackText("That building is not part of this construction.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
+		_draftOpen[playerIndex] = 0;
+		_draftOptionCounts[playerIndex] = 0;
+
 		var position = new Vector3(_draftSitePositionsX[playerIndex], 0f, _draftSitePositionsZ[playerIndex]);
-		UnitId site = _api.SpawnBuildingUnderConstruction(optionId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
+		UnitId site = _api.SpawnBuildingUnderConstruction(buildingTemplateId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
 		if (!site.IsValid)
 		{
 			player.AdjustWood(BuildingWoodCost);
 			player.ShowFeedbackText("The site could not be placed there.", new Vector3(1f, 0.3f, 0.25f));
+			ApplyDraftAbilityState(_api, playerIndex);
 			return;
 		}
 
@@ -1063,15 +1152,10 @@ public class MapScript : IWasmModule, ILobbyScript
 		// refuse does not cost the deck one of its nine buildings for the rest of the match.
 		_deckTakenBuildings |= 1 << profileIndex;
 
-		player.ShowFeedbackText($"{_api.GetUnitName(optionId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
+		ApplyDraftAbilityState(_api, playerIndex);
+
+		player.ShowFeedbackText($"{_api.GetUnitName(buildingTemplateId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
 		player.PlayClickSound();
-	}
-
-	private void HandlePlayerChoiceCanceled(int playerIndex, string topic)
-	{
-		if (topic != ConstructionChoiceTopic) return;
-
-		AbandonOpenDraft(playerIndex);
 	}
 
 	/// <summary>
@@ -1083,11 +1167,9 @@ public class MapScript : IWasmModule, ILobbyScript
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 		if (_draftOpen[playerIndex] == 0) return;
 
-		int handle = _draftHandles[playerIndex];
 		_draftOpen[playerIndex] = 0;
-		_draftHandles[playerIndex] = 0;
-
-		if (handle > 0) _api.ClosePlayerChoice(playerIndex, handle);
+		_draftOptionCounts[playerIndex] = 0;
+		ApplyDraftAbilityState(_api, playerIndex);
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		if (!player.IsActive) return;

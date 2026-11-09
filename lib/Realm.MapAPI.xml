@@ -1231,37 +1231,6 @@
             <param name="totalConstructionSeconds">How much build time the site needs before it completes.</param>
             <returns>The site unit, or an invalid handle when the template is not a building this map defines.</returns>
         </member>
-        <member name="M:Realm.MapAPI.IGameAPI.OfferPlayerChoice(System.Int32,System.String,System.String,System.String[],System.String[])">
-            <summary>
-            Offers a player a short list of options and reserves them until that player answers or the map closes the offer.
-            The client shows the offer as a card listing every label with its own button; a pick is reported through
-            <see cref="E:Realm.MapAPI.IGameAPI.OnPlayerChoiceLocked" /> and a dismissal through <see cref="E:Realm.MapAPI.IGameAPI.OnPlayerChoiceCanceled" />. The map decides
-            what a pick means, so an offer is nothing more than a question the authority relays on that player's screen.
-            A player holds at most one open offer at a time: offering a second one while the first is unanswered is refused
-            rather than replacing it, so an answer can never arrive for a question the player can no longer see.
-            </summary>
-            <param name="playerIndex">The zero-based player slot index that should answer.</param>
-            <param name="topic">The map's own name for this question, echoed back with the answer so one handler can serve every offer.</param>
-            <param name="title">The heading shown on the card, such as "Choose a building" or "Begin construction".</param>
-            <param name="optionIds">The identifiers the map receives back when an option is picked, in the order shown.</param>
-            <param name="optionLabels">The text shown for each option, in the same order; a missing label falls back to its identifier.</param>
-            <returns>The handle that identifies this offer, or zero when the player could not be given one.</returns>
-        </member>
-        <member name="M:Realm.MapAPI.IGameAPI.ClosePlayerChoice(System.Int32,System.Int32)">
-            <summary>
-            Closes an offer without an answer, for a question that is no longer worth asking because the match moved on, the
-            player was eliminated, or the map changed its mind. The card is taken off that player's screen.
-            </summary>
-            <param name="playerIndex">The zero-based player slot index that holds the offer.</param>
-            <param name="choiceHandle">The handle <see cref="M:Realm.MapAPI.IGameAPI.OfferPlayerChoice(System.Int32,System.String,System.String,System.String[],System.String[])" /> returned for it.</param>
-        </member>
-        <member name="M:Realm.MapAPI.IGameAPI.HasOpenPlayerChoice(System.Int32)">
-            <summary>
-            Reports whether a player has an offer waiting on an answer.
-            </summary>
-            <param name="playerIndex">The zero-based player slot index to ask about.</param>
-            <returns>True when that player's screen is showing a card it has not answered.</returns>
-        </member>
         <member name="M:Realm.MapAPI.IGameAPI.SetPlayerGold(System.Int32,System.Single)">
             <summary>
             Sets the gold resource for the specified player slot.
@@ -1893,20 +1862,6 @@
         <member name="E:Realm.MapAPI.IGameAPI.OnUnitOrdered">
             <summary>
             Triggered when a unit is issued an order.
-            </summary>
-        </member>
-        <member name="E:Realm.MapAPI.IGameAPI.OnPlayerChoiceLocked">
-            <summary>
-            Triggered when a player answers an offer made by <see cref="M:Realm.MapAPI.IGameAPI.OfferPlayerChoice(System.Int32,System.String,System.String,System.String[],System.String[])" />.
-            Parameters are: the player slot index, the offer's topic, and the identifier of the option that was picked.
-            The option identifier is always one the map passed in that offer, because the authority validates the answer
-            against the offer it made before reporting it here.
-            </summary>
-        </member>
-        <member name="E:Realm.MapAPI.IGameAPI.OnPlayerChoiceCanceled">
-            <summary>
-            Triggered when a player dismisses an offer made by <see cref="M:Realm.MapAPI.IGameAPI.OfferPlayerChoice(System.Int32,System.String,System.String,System.String[],System.String[])" /> instead of answering it.
-            Parameters are: the player slot index and the offer's topic.
             </summary>
         </member>
         <member name="M:Realm.MapAPI.IGameAPI.GetPlayerTechLevel(System.Int32,System.String)">

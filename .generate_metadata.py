@@ -376,7 +376,7 @@ metadata = {
         "ShowUnitManaBar": True,
         "ShowUnitLevel": True,
         "HowToPlayObjective": "Destroy the enemy Nexus.",
-        "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck: lock one for 100 wood and it produces soldiers automatically from its charges, with every soldier matching your hero's level. Spend gold at your Nexus on relics.",
+        "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck and shows them in the command grid of your hero and Nexus: pick one for 100 wood and it produces soldiers automatically from its charges, with every soldier matching your hero's level. Spend gold at your Nexus on relics.",
     },
     "Dependencies": [],
     "Templates": {

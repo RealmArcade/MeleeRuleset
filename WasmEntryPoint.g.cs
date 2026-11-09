@@ -249,21 +249,6 @@ public class WasmEntryPoint
         if (_gameApi is GameAPI_WasmModule api) api.TriggerOnPlayerChatMessage(text, param, value);
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "on-player-choice-canceled")]
-    public static void OnPlayerChoiceCanceled(int value, nint textPtr, int textLen)
-    {
-        string text = ReadString(textPtr, textLen);
-        if (_gameApi is GameAPI_WasmModule api) api.TriggerOnPlayerChoiceCanceled(value, text);
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "on-player-choice-locked")]
-    public static void OnPlayerChoiceLocked(int value, nint text1Ptr, int text1Len, nint text2Ptr, int text2Len)
-    {
-        string text1 = ReadString(text1Ptr, text1Len);
-        string text2 = ReadString(text2Ptr, text2Len);
-        if (_gameApi is GameAPI_WasmModule api) api.TriggerOnPlayerChoiceLocked(value, text1, text2);
-    }
-
     [UnmanagedCallersOnly(EntryPoint = "on-player-left")]
     public static void OnPlayerLeft(int value)
     {
