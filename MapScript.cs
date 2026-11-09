@@ -12,6 +12,10 @@ public class MapScript : IWasmModule, ILobbyScript
 	private const string WoodNodeTemplateId = "resource/melee_woodland";
 
 	private const int MaximumBuildingsPerPlayer = 5;
+	private const string ConstructionAbilityId = "ability/begin_construction";
+	private const string ConstructionChoiceTopic = "begin_construction";
+	private const float BuildingWoodCost = 100f;
+	private const int DraftOptionCount = 3;
 	private const int MaximumPopulation = 80;
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
@@ -109,6 +113,16 @@ public class MapScript : IWasmModule, ILobbyScript
 	private readonly int[] _soldierCounts = new int[SoldierProfiles.Length];
 	private readonly int[] _capacityCounts = new int[SoldierProfiles.Length];
 
+	private static readonly float[] ConstructionSecondsByProfile = { 30f, 30f, 30f, 30f, 30f, 30f, 35f, 35f, 35f };
+
+	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _draftHandles = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * DraftOptionCount];
+	private readonly float[] _draftSitePositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _draftSitePositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
+	private int _deckTakenBuildings;
+
 	private readonly int[] _heroEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _nexusEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _heroDeaths = new int[EcsSharedMemory.MAX_PLAYERS];
@@ -149,6 +163,8 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.OnUnitDamaged += HandleUnitDamaged;
 		api.OnSpellCast += HandleSpellCast;
 		api.OnConstructionFinished += HandleConstructionFinished;
+		api.OnPlayerChoiceLocked += HandlePlayerChoiceLocked;
+		api.OnPlayerChoiceCanceled += HandlePlayerChoiceCanceled;
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
 		for (int index = 0; index < players.Length; index++)
@@ -172,6 +188,7 @@ public class MapScript : IWasmModule, ILobbyScript
 			UpdateArmyLevel(api, player);
 			UpdateRevival(api, player);
 			UpdateProduction(api, player, delta);
+			AdvanceOwnConstruction(api, player, delta);
 		}
 
 		_bulwarkTimer += delta;
@@ -230,7 +247,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		player.Wood = StartingWood;
 		player.Stone = 0f;
 		player.MaxPopulation = MaximumPopulation;
-		api.SetPlayerBuildingLimit(playerIndex, MaximumBuildingsPerPlayer);
+		api.SetPlayerBuildingLimit(playerIndex, MaximumBuildingsPerPlayer + 1);
 
 		Vector2 anchor = SpawnAnchors[Math.Clamp(playerIndex - 1, 0, SpawnAnchors.Length - 1)];
 		_nexusPositionsX[playerIndex] = anchor.X;
@@ -608,6 +625,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		if (playerIndex <= 0 || _eliminated[playerIndex] != 0) return;
 
 		_eliminated[playerIndex] = 1;
+		AbandonOpenDraft(playerIndex);
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		player.TriggerDefeat("Your Nexus has been destroyed.");
@@ -653,6 +671,12 @@ public class MapScript : IWasmModule, ILobbyScript
 
 		int playerIndex = caster.Player;
 		if (playerIndex <= 0) return;
+
+		if (abilityId == ConstructionAbilityId)
+		{
+			BeginConstruction(playerIndex, position);
+			return;
+		}
 
 		if (abilityId == "ability/requisition")
 		{
@@ -726,6 +750,202 @@ public class MapScript : IWasmModule, ILobbyScript
 			_charges[entityId] = SoldierProfiles[profileIndex].MaximumCharges + extraCharges;
 			_rechargeTimers[entityId] = 0f;
 			PublishChargeBadge(api, player, building, _charges[entityId]);
+		}
+	}
+
+	private void BeginConstruction(int playerIndex, Vector3 position)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
+
+		PlayerId player = _api.GetPlayer(playerIndex);
+		if (!player.IsActive) return;
+
+		if (_api.HasOpenPlayerChoice(playerIndex))
+		{
+			player.ShowFeedbackText("Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		if (_api.GetPlayerBuildingCount(playerIndex) > MaximumBuildingsPerPlayer)
+		{
+			player.ShowFeedbackText($"All {MaximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		if (player.Wood < BuildingWoodCost)
+		{
+			player.ShowFeedbackText("A construction costs 100 wood.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		int optionCount = DrawDraftOptions(playerIndex);
+		if (optionCount == 0)
+		{
+			player.ShowFeedbackText("No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		var optionIds = new string[optionCount];
+		var optionLabels = new string[optionCount];
+		for (int index = 0; index < optionCount; index++)
+		{
+			string templateId = SoldierProfiles[_draftOptions[playerIndex * DraftOptionCount + index]].BuildingTemplateId;
+			optionIds[index] = templateId;
+			optionLabels[index] = _api.GetUnitName(templateId);
+		}
+
+		int handle = _api.OfferPlayerChoice(playerIndex, ConstructionChoiceTopic, "Choose a building", optionIds, optionLabels);
+		if (handle == 0)
+		{
+			player.ShowFeedbackText("The draw could not be offered.", new Vector3(1f, 0.3f, 0.25f));
+			return;
+		}
+
+		player.AdjustWood(-BuildingWoodCost);
+		_draftOpen[playerIndex] = 1;
+		_draftHandles[playerIndex] = handle;
+		_draftSitePositionsX[playerIndex] = position.X;
+		_draftSitePositionsZ[playerIndex] = position.Z;
+
+		_api.SpawnExpandingGroundRing(new Vector3(position.X, 0f, position.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
+	}
+
+	/// <summary>
+	///     Draws the buildings this player may be offered: the shared deck minus what another player already took, minus
+	///     what this player already stands on, which is the unique-copy rule the content set is balanced against. A deck
+	///     with nothing left is restored first, so a long match never stalls for lack of options.
+	/// </summary>
+	private int DrawDraftOptions(int playerIndex)
+	{
+		Span<int> candidates = stackalloc int[SoldierProfiles.Length];
+		int candidateCount = CollectDraftCandidates(playerIndex, candidates);
+		if (candidateCount == 0)
+		{
+			_deckTakenBuildings = 0;
+			candidateCount = CollectDraftCandidates(playerIndex, candidates);
+		}
+
+		int optionCount = Math.Min(DraftOptionCount, candidateCount);
+		int optionStart = playerIndex * DraftOptionCount;
+		for (int index = 0; index < optionCount; index++)
+		{
+			int pick = _api.RandomInt(0, candidateCount - 1);
+			_draftOptions[optionStart + index] = candidates[pick];
+			candidates[pick] = candidates[candidateCount - 1];
+			candidateCount--;
+		}
+
+		return optionCount;
+	}
+
+	private int CollectDraftCandidates(int playerIndex, Span<int> destination)
+	{
+		ReadOnlySpan<UnitId> owned = _api.GetUnitsOwnedByPlayer(playerIndex);
+		int count = 0;
+		for (int profileIndex = 0; profileIndex < SoldierProfiles.Length; profileIndex++)
+		{
+			if ((_deckTakenBuildings & (1 << profileIndex)) != 0) continue;
+			if (PlayerOwnsBuilding(owned, SoldierProfiles[profileIndex].BuildingTemplateId)) continue;
+
+			destination[count++] = profileIndex;
+		}
+
+		return count;
+	}
+
+	private static bool PlayerOwnsBuilding(ReadOnlySpan<UnitId> owned, string templateId)
+	{
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId unit = owned[index];
+			if (unit.IsDead || !unit.IsBuilding) continue;
+			if (unit.TemplateID == templateId) return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	///     Locks the building a player picked. The deck entry leaves the shared deck here rather than when it was drawn,
+		///     so an option the player declined stays available to everybody else.
+	/// </summary>
+	private void HandlePlayerChoiceLocked(int playerIndex, string topic, string optionId)
+	{
+		if (topic != ConstructionChoiceTopic) return;
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
+		if (_draftOpen[playerIndex] == 0) return;
+
+		_draftOpen[playerIndex] = 0;
+		_draftHandles[playerIndex] = 0;
+
+		PlayerId player = _api.GetPlayer(playerIndex);
+		int profileIndex = FindProfileIndexByBuilding(optionId);
+		if (profileIndex < 0)
+		{
+			player.AdjustWood(BuildingWoodCost);
+			return;
+		}
+
+		_deckTakenBuildings |= 1 << profileIndex;
+
+		var position = new Vector3(_draftSitePositionsX[playerIndex], 0f, _draftSitePositionsZ[playerIndex]);
+		UnitId site = _api.SpawnBuildingUnderConstruction(optionId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
+		if (!site.IsValid)
+		{
+			player.AdjustWood(BuildingWoodCost);
+			player.ShowFeedbackText("The site could not be placed there.", new Vector3(1f, 0.3f, 0.25f));
+			return;
+		}
+
+		player.ShowFeedbackText($"{_api.GetUnitName(optionId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
+		player.PlayClickSound();
+	}
+
+	private void HandlePlayerChoiceCanceled(int playerIndex, string topic)
+	{
+		if (topic != ConstructionChoiceTopic) return;
+
+		AbandonOpenDraft(playerIndex);
+	}
+
+	/// <summary>
+	///     Gives back what an unanswered draft reserved: the deck entries return because nothing was ever taken from the
+	///     deck, and the 100 wood returns because it was charged when the draw was made.
+	/// </summary>
+	private void AbandonOpenDraft(int playerIndex)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
+		if (_draftOpen[playerIndex] == 0) return;
+
+		int handle = _draftHandles[playerIndex];
+		_draftOpen[playerIndex] = 0;
+		_draftHandles[playerIndex] = 0;
+
+		if (handle > 0) _api.ClosePlayerChoice(playerIndex, handle);
+
+		PlayerId player = _api.GetPlayer(playerIndex);
+		if (!player.IsActive) return;
+
+		player.AdjustWood(BuildingWoodCost);
+		player.ShowFeedbackText("Construction cancelled. Its 100 wood is returned.", new Vector3(0.75f, 0.75f, 0.75f));
+	}
+
+	/// <summary>
+	///     Advances the sites this match started through the draft. Nothing is working them, so the map is the clock that
+	///     builds them; the engine still announces each completion through OnConstructionFinished, where the charges start.
+	/// </summary>
+	private void AdvanceOwnConstruction(IGameAPI api, PlayerId player, float delta)
+	{
+		if (delta <= 0f) return;
+
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId building = owned[index];
+			if (building.IsDead || !building.IsBuilding) continue;
+			if (api.GetUnitConstructionProgress(building) >= 1f) continue;
+
+			api.AdvanceUnitConstruction(building, delta);
 		}
 	}
 
@@ -837,8 +1057,8 @@ public class MapScript : IWasmModule, ILobbyScript
 
 	private static float ResolveConstructionSeconds(string templateId)
 	{
-		BuildingProfile profile = FindBuildingProfile(templateId);
-		return string.IsNullOrEmpty(profile.TemplateId) ? 30f : 30f;
+		int profileIndex = FindProfileIndexByBuilding(templateId);
+		return profileIndex < 0 ? 30f : ConstructionSecondsByProfile[profileIndex];
 	}
 
 	private static bool IsBuildingOperational(IGameAPI api, UnitId building)

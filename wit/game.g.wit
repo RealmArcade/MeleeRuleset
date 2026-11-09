@@ -25,6 +25,7 @@ interface game-api {
     clear-leaderboard-board: func(board-id: string);
     clear-player-selection: func(player-index: s32);
     clear-summary-table: func();
+    close-player-choice: func(player-index: s32, choice-handle: s32);
     collect-loot-item: func(loot-item-id: s32, unit-id: s32) -> bool;
     collect-loot-item-by-player: func(loot-item-id: s32, player-index: s32) -> bool;
     count-units-owned-by-player: func(player-index: s32) -> s32;
@@ -111,6 +112,7 @@ interface game-api {
     get-zone-center-y: func(zone-handle: s32) -> f32;
     get-zone-center-z: func(zone-handle: s32) -> f32;
     has-coordinate: func(coordinate-name: string) -> bool;
+    has-open-player-choice: func(player-index: s32) -> bool;
     is-host: func(player-index: s32) -> bool;
     is-loot-item-auto-pickup: func(item-id: s32) -> bool;
     is-loot-item-despawned: func(item-id: s32) -> bool;
@@ -127,6 +129,7 @@ interface game-api {
     issue-stop-order: func(unit-id: s32);
     kick-player: func(player-index: s32, reason: string);
     kill-unit: func(unit-id: s32, execute-despawn-shader: bool, play-death-animation: bool);
+    offer-player-choice: func(player-index: s32, topic: string, title: string, option-ids: list<string>, option-labels: list<string>) -> s32;
     pan-player-camera-to: func(player-index: s32, position-x: f32, position-y: f32, position-z: f32, duration: f32);
     ping-player-minimap: func(player-index: s32, position-x: f32, position-y: f32, position-z: f32);
     play-player-click-sound: func(player-index: s32);
@@ -237,6 +240,7 @@ interface game-api {
     show-summary-table: func(title: string, visible: bool);
     silence-unit: func(unit-id: s32, duration: f32);
     spawn-barrage-volley: func(effect-type-id: string, target-area-center-x: f32, target-area-center-y: f32, target-area-center-z: f32, radius: f32, count: s32, interval-seconds: f32);
+    spawn-building-under-construction: func(building-type-id: string, position-x: f32, position-y: f32, position-z: f32, player-index: s32, total-construction-seconds: f32) -> s32;
     spawn-expanding-burst-sphere: func(position-x: f32, position-y: f32, position-z: f32, max-radius: f32, speed: f32, duration: f32, color-r: f32, color-g: f32, color-b: f32, color-has-color: bool);
     spawn-expanding-ground-ring: func(position-x: f32, position-y: f32, position-z: f32, max-radius: f32, speed: f32, duration: f32, color-r: f32, color-g: f32, color-b: f32, color-has-color: bool);
     spawn-loot-item: func(item-type-id: string, position-x: f32, position-y: f32, position-z: f32, charges: s32, lifetime: f32) -> s32;

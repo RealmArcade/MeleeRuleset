@@ -24,7 +24,7 @@
     "ShowUnitManaBar": true,
     "ShowUnitLevel": true,
     "HowToPlayObjective": "Destroy the enemy Nexus.",
-    "HowToPlayInstructions": "Your hero is the only unit you command. Buildings you construct produce soldiers automatically from their charges, and every soldier matches your hero's level. Spend gold at your Nexus on relics and wood on buildings."
+    "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck: lock one for 100 wood and it produces soldiers automatically from its charges, with every soldier matching your hero's level. Spend gold at your Nexus on relics."
   },
   "Dependencies": [],
   "Templates": {
@@ -75,21 +75,12 @@
         "YOffset": 0.8,
         "CollisionCircle": 0.6,
         "PathingType": 9,
-        "BuildOptions": [
-          "building/bulwark_hall",
-          "building/warband_yard",
-          "building/spear_lodge",
-          "building/archery_range",
-          "building/bolt_foundry",
-          "building/sling_camp",
-          "building/mender_shrine",
-          "building/signal_post",
-          "building/vigil_bastion"
-        ],
+        "BuildOptions": null,
         "Abilities": [
           "ability/grounding_shout",
           "ability/hold_fast",
-          "ability/shield_bash"
+          "ability/shield_bash",
+          "ability/begin_construction"
         ],
         "IsHero": true
       },
@@ -139,21 +130,12 @@
         "YOffset": 0.8,
         "CollisionCircle": 0.6,
         "PathingType": 9,
-        "BuildOptions": [
-          "building/bulwark_hall",
-          "building/warband_yard",
-          "building/spear_lodge",
-          "building/archery_range",
-          "building/bolt_foundry",
-          "building/sling_camp",
-          "building/mender_shrine",
-          "building/signal_post",
-          "building/vigil_bastion"
-        ],
+        "BuildOptions": null,
         "Abilities": [
           "ability/ember_lance",
           "ability/cinderfield",
-          "ability/backdraft"
+          "ability/backdraft",
+          "ability/begin_construction"
         ],
         "IsHero": true
       },
@@ -203,21 +185,12 @@
         "YOffset": 0.8,
         "CollisionCircle": 0.6,
         "PathingType": 9,
-        "BuildOptions": [
-          "building/bulwark_hall",
-          "building/warband_yard",
-          "building/spear_lodge",
-          "building/archery_range",
-          "building/bolt_foundry",
-          "building/sling_camp",
-          "building/mender_shrine",
-          "building/signal_post",
-          "building/vigil_bastion"
-        ],
+        "BuildOptions": null,
         "Abilities": [
           "ability/requisition",
           "ability/forced_march",
-          "ability/emergency_levy"
+          "ability/emergency_levy",
+          "ability/begin_construction"
         ],
         "IsHero": true
       },
@@ -1209,6 +1182,18 @@
             "BuffId": "buff/standard_aura"
           }
         ]
+      },
+      {
+        "TemplateID": "ability/begin_construction",
+        "Name": "Begin Construction",
+        "AbilityType": "target_spell",
+        "Description": "Costs 100 wood. Draws up to three buildings from the shared deck and starts the one you lock at the target location.",
+        "ManaCost": 0,
+        "Cooldown": 0,
+        "TargetRange": 8,
+        "GridX": 3,
+        "GridY": 0,
+        "Hotkey": "B"
       }
     ],
     "Upgrades": [],

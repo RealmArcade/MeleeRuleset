@@ -25,18 +25,6 @@ CONSTRUCTION_TIMES = {
     "building/vigil_bastion": 35,
 }
 
-BUILD_OPTIONS = [
-    "building/bulwark_hall",
-    "building/warband_yard",
-    "building/spear_lodge",
-    "building/archery_range",
-    "building/bolt_foundry",
-    "building/sling_camp",
-    "building/mender_shrine",
-    "building/signal_post",
-    "building/vigil_bastion",
-]
-
 # id, name, hp, armor, damage, interval, range, speed, gold bounty, xp bounty, model, abilities
 SOLDIERS = [
     ("unit/shieldbearer", "Shieldbearer", 420, 7, 14, 1.4, 1.4, 4.2, 8, 6, "fantasy_warrior_unit_1.rmesh", []),
@@ -53,13 +41,13 @@ SOLDIERS = [
 HEROES = [
     ("hero/vale", "Vale, the Lineholder", 900, 8, 30, 1.25, 1.6, 5.2, 240, 2.2, 18, 10, 14, 12, 8, 4,
      "fantasy_warrior_unit_1.rmesh", 1.1,
-     ["ability/grounding_shout", "ability/hold_fast", "ability/shield_bash"]),
+     ["ability/grounding_shout", "ability/hold_fast", "ability/shield_bash", "ability/begin_construction"]),
     ("hero/sable", "Sable, the Ashcaller", 700, 3, 20, 1.5, 8.5, 5.0, 360, 4.0, 8, 12, 10, 26, 10, 8,
      "fantasy_warrior_unit_1.rmesh", 1.0,
-     ["ability/ember_lance", "ability/cinderfield", "ability/backdraft"]),
+     ["ability/ember_lance", "ability/cinderfield", "ability/backdraft", "ability/begin_construction"]),
     ("hero/corvus", "Corvus, the Quartermaster", 800, 5, 24, 1.3, 9.0, 5.0, 300, 3.2, 10, 12, 12, 20, 12, 14,
      "orc_warrior_7.rmesh", 1.05,
-     ["ability/requisition", "ability/forced_march", "ability/emergency_levy"]),
+     ["ability/requisition", "ability/forced_march", "ability/emergency_levy", "ability/begin_construction"]),
 ]
 
 HERO_DESCRIPTIONS = {
@@ -164,6 +152,11 @@ ABILITIES = [
             {"Kind": "buff", "Delivery": "radius", "Targets": "allies", "Radius": 7, "Duration": 6, "BuffId": "buff/standard_aura"},
         ],
     },
+    {
+        "TemplateID": "ability/begin_construction", "Name": "Begin Construction", "AbilityType": "target_spell",
+        "Description": "Costs 100 wood. Draws up to three buildings from the shared deck and starts the one you lock at the target location.",
+        "ManaCost": 0, "Cooldown": 0, "TargetRange": 8, "GridX": 3, "GridY": 0, "Hotkey": "B",
+    },
 ]
 
 RELICS = [
@@ -265,7 +258,7 @@ def hero(entry):
         "YOffset": 0.8,
         "CollisionCircle": 0.6,
         "PathingType": 9,
-        "BuildOptions": BUILD_OPTIONS,
+        "BuildOptions": None,
         "Abilities": abilities,
         "IsHero": True,
     }
@@ -383,7 +376,7 @@ metadata = {
         "ShowUnitManaBar": True,
         "ShowUnitLevel": True,
         "HowToPlayObjective": "Destroy the enemy Nexus.",
-        "HowToPlayInstructions": "Your hero is the only unit you command. Buildings you construct produce soldiers automatically from their charges, and every soldier matches your hero's level. Spend gold at your Nexus on relics and wood on buildings.",
+        "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck: lock one for 100 wood and it produces soldiers automatically from its charges, with every soldier matching your hero's level. Spend gold at your Nexus on relics.",
     },
     "Dependencies": [],
     "Templates": {

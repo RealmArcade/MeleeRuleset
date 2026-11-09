@@ -31,9 +31,10 @@ Composition is flat and one layer deep: Secluded Crest is a primitive map, and n
 * **Elimination.** Destroying a Nexus eliminates its player; the last team holding a Nexus wins.
 * **Under-attack alerts** are throttled per player, name the victim, ping the minimap and play a warning.
 * **Instant abilities.** Requisition advances the active construction and Emergency Levy adds a charge to every soldier-granting building.
+* **The shared building deck.** Begin Construction costs 100 wood and draws up to three buildings from one deck shared by every player. The draw excludes what another player already took and what the player already stands on, and a deck with nothing left is restored before it is drawn again. The pick is a card listing the three packages; the chosen one leaves the deck, the others return, and a player who dismisses the card gets the 100 wood back. The site then builds on its own for the building's authored construction time and starts its charges when the engine announces the completion.
 
 ## Rules the engine cannot express yet
 
-* **Deck drafting.** The three-option draw, its reservation, the 99% construction gate and deck competition need a generic "offer this player N choices and report the answer" API plus the client card that renders it. Until then a player builds any package from the hero's build options, and building supply is a fixed cap of five.
+* **The silhouette and its 99% gate.** The design draws the options only after an unidentified site already stands there, and holds that site at 99% until the choice is locked. The engine cannot swap a unit's template, so the card is answered first and the chosen building's site appears the moment it is locked; construction time therefore runs after the decision instead of doubling as the decision window. The reserved options are also not shown on a site to an opponent who inspects it.
 * **Formations and targeting rules.** Front, Flank and Back formation slots and the Standard, Tank-Shredder and Assassin targeting rules belong in the engine's autonomous-army behaviour, not in a map script; soldiers currently use the engine's default engagement.
 * **Gathering workers and repair.** Passive income is a per-building rate rather than worker travel time, and building repair is the engine's existing behaviour rather than a hero action this script drives.
