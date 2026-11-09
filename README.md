@@ -4,19 +4,21 @@ A map package that implements the melee ruleset from the design documents: each 
 
 ## Composition
 
-`composite.composition.json` is the composition this map is exported with. It is a recipe, not the export-only descriptor, so this folder stays an ordinary editable map.
+`composite.manifest.json` is this map's composition descriptor: the sub-archives it wires in and the rule each of their files lands under. The editor offers it the next time the map is opened, and the export writes the same file into the package it produces.
 
 | Sub-archive | Rule | Why |
 | :--- | :--- | :--- |
-| Secluded Crest v1.0.0 (`cc2b97b2…`) | `Overwrite`, with `metadata.json` set to `Union` | The ruleset authors no terrain and no models, so the sub-archive's `terrain.json`, terrain images and `.rmesh` models become this package's. The two maps' `metadata.json` merge instead of one replacing the other, and the parent keeps its own name, version, build number and licence. |
+| Secluded Crest v1.0.0 (`cc2b97b2…`) | `Overwrite`, with `metadata.json` set to `Union` | The ruleset authors no terrain and no models, so the sub-archive's `terrain.json`, terrain images and `.rmesh` models become this package's. The two maps' `metadata.json` are united instead of one replacing the other, so both maps' templates survive. |
+
+`composite.metadata.json` settles the keys the metadata union cannot: `GameBuildNumber`, and the `MapProperties` keys both maps declare differently (the name, description, author, suggested players, shroud, tags, map type, playable slots and the how-to-play text). A value in that file is written verbatim in place of both maps' values, so the ruleset's own identity and full-information shroud win without any hard-coded rule, while every property neither map contradicts (the camera bounds, the environment and terrain settings, and the sub-archive's models) still arrives from the terrain map.
 
 Composition is flat and one layer deep: Secluded Crest is a primitive map, and nothing composes a composition.
 
 ### Prerequisites
 
 * Secluded Crest v1.0.0 must be present in the local map store before the package can be planned or played, because sub-archives are resolved by name, version and pinned manifest hash rather than by folder path.
-* The editor's **Composite Map** menu plans the composition, validates the union, writes `composite.manifest.json` for the export only, and exports the `.rmap`. The recipe is rewritten from whatever the dialog holds when an export succeeds.
-* The exported package carries this map's own files and the descriptor. A client that plays it downloads the sub-archive and hard-links the union of both packages into the composite's folder before the match can start.
+* The editor's **Composite Map** menu plans the composition, validates the union and the resolution, and exports the `.rmap`. The descriptor is rewritten from whatever the dialog holds when an export succeeds.
+* The exported package carries this map's own files, the descriptor and the resolution. A client that plays it downloads the sub-archive and hard-links the union of both packages into the composite's folder before the match can start.
 
 ## What the script implements
 
@@ -31,10 +33,10 @@ Composition is flat and one layer deep: Secluded Crest is a primitive map, and n
 * **Elimination.** Destroying a Nexus eliminates its player; the last team holding a Nexus wins.
 * **Under-attack alerts** are throttled per player, name the victim, ping the minimap and play a warning.
 * **Instant abilities.** Requisition advances the active construction and Emergency Levy adds a charge to every soldier-granting building.
-* **The shared building deck.** Begin Construction costs 100 wood and draws up to three buildings from one deck shared by every player. The draw excludes what another player already took and what the player already stands on, and a deck with nothing left is restored before it is drawn again. The pick is a card listing the three packages; the chosen one leaves the deck, the others return, and a player who dismisses the card gets the 100 wood back. The site then builds on its own for the building's authored construction time and starts its charges when the engine announces the completion.
+* **The shared building deck.** Begin Construction costs 100 wood and draws up to three buildings from one deck shared by every player. The draw excludes what another player already took and what the player already stands on, and a deck with nothing left is restored before it is drawn again. The three packages are offered as commands in the hero's and Nexus's command grid; the chosen one leaves the deck, the others return, and a player who abandons the draw gets the 100 wood back. The site then builds on its own for the building's authored construction time and starts its charges when the engine announces the completion.
 
 ## Rules the engine cannot express yet
 
-* **The silhouette and its 99% gate.** The design draws the options only after an unidentified site already stands there, and holds that site at 99% until the choice is locked. The engine cannot swap a unit's template, so the card is answered first and the chosen building's site appears the moment it is locked; construction time therefore runs after the decision instead of doubling as the decision window. The reserved options are also not shown on a site to an opponent who inspects it.
+* **The silhouette and its 99% gate.** The design draws the options only after an unidentified site already stands there, and holds that site at 99% until the choice is locked. The engine cannot swap a unit's template, so the draw is answered from the command grid first and the chosen building's site appears the moment a package is cast; construction time therefore runs after the decision instead of doubling as the decision window. The reserved options are also not shown on a site to an opponent who inspects it.
 * **Formations and targeting rules.** Front, Flank and Back formation slots and the Standard, Tank-Shredder and Assassin targeting rules belong in the engine's autonomous-army behaviour, not in a map script; soldiers currently use the engine's default engagement.
 * **Gathering workers and repair.** Passive income is a per-building rate rather than worker travel time, and building repair is the engine's existing behaviour rather than a hero action this script drives.
