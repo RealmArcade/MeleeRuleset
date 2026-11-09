@@ -1052,10 +1052,11 @@ public class MapScript : IWasmModule, ILobbyScript
 			SoldierProfile profile = SoldierProfiles[index];
 			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
-			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {profile.Capacity} capacity, {profile.MaximumCharges} charges.";
+			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {profile.Capacity} capacity, {profile.MaximumCharges} charges every {profile.RechargeSeconds:0}s. Income {DescribeBuildingIncome(profile.BuildingTemplateId)}.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
 			AddDraftAbilityToCommandUnits(api, profile.BuildingTemplateId);
+			api.SetAbilityTooltip(profile.BuildingTemplateId, tooltip);
 		}
 
 		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
@@ -1359,6 +1360,15 @@ public class MapScript : IWasmModule, ILobbyScript
 		}
 
 		return -1;
+	}
+
+	private static string DescribeBuildingIncome(string buildingTemplateId)
+	{
+		BuildingProfile building = FindBuildingProfile(buildingTemplateId);
+		if (building.GoldPerMinute > 0f) return $"{building.GoldPerMinute:0.#} gold/min";
+		if (building.WoodPerMinute > 0f) return $"{building.WoodPerMinute:0.#} wood/min";
+
+		return "none";
 	}
 
 	private static BuildingProfile FindBuildingProfile(string templateId)
