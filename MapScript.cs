@@ -33,6 +33,21 @@ public class MapScript : IWasmModule, ILobbyScript
 	private const float BulwarkArmorPerBuilding = 1.5f;
 	private const float BulwarkMagicResistancePerBuilding = 1.5f;
 
+	private const string MendAbilityId = "ability/mend";
+	private const string WardingAegisAbilityId = "ability/warding_aegis";
+	private const string StandardAuraAbilityId = "ability/standard_aura";
+	private const string StandardAuraBuffId = "buff/standard_aura";
+	private const string MenderTemplateId = "unit/mender";
+	private const string WarderTemplateId = "unit/warder";
+	private const string StandardBearerTemplateId = "unit/standard_bearer";
+	private const float MendRadius = 8f;
+	private const float MendCooldownSeconds = 2.2f;
+	private const float MendHealthFractionBelow = 0.9f;
+	private const float WardingAegisRadius = 8f;
+	private const float WardingAegisCooldownSeconds = 12f;
+	private const float StandardAuraRadius = 7f;
+	private const float StandardAuraCooldownSeconds = 5f;
+
 	private readonly record struct SoldierProfile(
 		string SoldierTemplateId,
 		string BuildingTemplateId,
@@ -132,6 +147,9 @@ public class MapScript : IWasmModule, ILobbyScript
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _cinderMarkDamage = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _mendTimers = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _wardingAegisTimers = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _standardAuraTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _eliminated = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
@@ -195,6 +213,7 @@ public class MapScript : IWasmModule, ILobbyScript
 			UpdateArmyLevel(api, player);
 			UpdateRevival(api, player);
 			UpdateProduction(api, player, delta);
+			ApplyAutoCasts(api, player, delta);
 			AdvanceOwnConstruction(api, player, delta);
 		}
 
@@ -501,6 +520,123 @@ public class MapScript : IWasmModule, ILobbyScript
 			api.DealTypedDamage(hero, unit, whole, "magic");
 			_burningFromMark[entityId] = 0;
 		}
+	}
+
+	/// <summary>
+	///     Casts the soldier abilities the content set gives to an auto-cast rule and no player order: the Mender heals the
+	///     most wounded ally beside it, the Warder shields the weakest one, and the Standard Bearer keeps its aura on the
+	///     soldiers around it. The map keeps each caster's own clock, because these abilities are never triggered by a
+	///     player and the authority has no order to spend a cooldown on.
+	/// </summary>
+	private void ApplyAutoCasts(IGameAPI api, PlayerId player, float delta)
+	{
+		if (delta <= 0f) return;
+
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId caster = owned[index];
+			if (caster.IsDead || caster.IsBuilding || caster.IsHero) continue;
+
+			string templateId = caster.TemplateID;
+			if (templateId == MenderTemplateId)
+			{
+				UpdateMend(api, owned, caster, delta);
+				continue;
+			}
+
+			if (templateId == WarderTemplateId)
+			{
+				UpdateWardingAegis(api, owned, caster, delta);
+				continue;
+			}
+
+			if (templateId == StandardBearerTemplateId) UpdateStandardAura(api, owned, caster, delta);
+		}
+	}
+
+	private void UpdateMend(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
+	{
+		int entityId = caster.UniqueId;
+		_mendTimers[entityId] -= delta;
+		if (_mendTimers[entityId] > 0f) return;
+
+		_mendTimers[entityId] = 0f;
+		if (!TryFindMostWoundedAlly(owned, caster, MendRadius, MendHealthFractionBelow, out UnitId patient)) return;
+
+		_mendTimers[entityId] = MendCooldownSeconds;
+		api.CastAbility(caster, MendAbilityId, patient.Position);
+	}
+
+	private void UpdateWardingAegis(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
+	{
+		int entityId = caster.UniqueId;
+		_wardingAegisTimers[entityId] -= delta;
+		if (_wardingAegisTimers[entityId] > 0f) return;
+
+		_wardingAegisTimers[entityId] = 0f;
+		if (!TryFindMostWoundedAlly(owned, caster, WardingAegisRadius, 1f, out UnitId ward)) return;
+
+		_wardingAegisTimers[entityId] = WardingAegisCooldownSeconds;
+		api.CastAbility(caster, WardingAegisAbilityId, ward.Position);
+	}
+
+	private void UpdateStandardAura(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
+	{
+		int entityId = caster.UniqueId;
+		_standardAuraTimers[entityId] -= delta;
+		if (_standardAuraTimers[entityId] > 0f) return;
+
+		_standardAuraTimers[entityId] = 0f;
+		if (!HasAllyWithoutAura(api, owned, caster)) return;
+
+		_standardAuraTimers[entityId] = StandardAuraCooldownSeconds;
+		api.CastAbility(caster, StandardAuraAbilityId, caster.Position);
+	}
+
+	private static bool TryFindMostWoundedAlly(ReadOnlySpan<UnitId> owned, UnitId caster, float radius, float healthFractionBelow, out UnitId worstWounded)
+	{
+		worstWounded = UnitId.Invalid;
+		Vector3 casterPosition = caster.Position;
+		float radiusSquared = radius * radius;
+		float lowestFraction = healthFractionBelow;
+
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId ally = owned[index];
+			if (ally.IsDead || ally.IsBuilding) continue;
+			if (ally.UniqueId == caster.UniqueId) continue;
+			if (Vector3.DistanceSquared(ally.Position, casterPosition) > radiusSquared) continue;
+
+			float maximumHealth = ally.MaxHealth;
+			if (maximumHealth <= 0f) continue;
+
+			float fraction = ally.Health / maximumHealth;
+			if (fraction >= lowestFraction) continue;
+
+			lowestFraction = fraction;
+			worstWounded = ally;
+		}
+
+		return worstWounded.IsValid;
+	}
+
+	private static bool HasAllyWithoutAura(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster)
+	{
+		Vector3 casterPosition = caster.Position;
+		float radiusSquared = StandardAuraRadius * StandardAuraRadius;
+
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId ally = owned[index];
+			if (ally.IsDead || ally.IsBuilding) continue;
+			if (Vector3.DistanceSquared(ally.Position, casterPosition) > radiusSquared) continue;
+			if (api.UnitHasBuff(ally, StandardAuraBuffId)) continue;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	private void RefreshBulwark(IGameAPI api, PlayerId player)
