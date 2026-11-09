@@ -1279,6 +1279,17 @@
                 </para>
             </summary>
         </member>
+        <member name="M:Realm.Ecs.ComponentTypeRegistry.VerifySharedComponentIds">
+            <summary>
+                Fails the registry when a component a map script reaches through shared memory is not registered under the
+                identifier <see cref="T:Realm.Ecs.ComponentIds" /> declares for it.
+            </summary>
+            <remarks>
+                The canonical identifiers come from this list's order, while a map script uses the constants, so inserting a type
+                above, removing one or reordering the list silently moves every later identifier and leaves the script reading the
+                wrong array or mask bit. Refusing to start states which type drifted instead of leaving a map to misbehave.
+            </remarks>
+        </member>
         <member name="T:Realm.Ecs.EcsWorld">
             <summary>
                 The entities and component arrays of one world. Owned by a single thread: entity creation, destruction and
@@ -2222,6 +2233,12 @@
             <summary>
             Defines deterministic canonical component type identifiers agreed upon by both host and guest simulation runtimes.
             </summary>
+            <remarks>
+                A map script reads its world through shared linear memory, where a component array is found by the directory entry
+                carrying one of these identifiers and a tag is found by this bit of the entity's component mask. The host sets that
+                mask bit from <c>ComponentType&lt;T&gt;.Id</c>, so every identifier here has to be the identifier the canonical
+                registry assigns to that type; <c>ComponentTypeRegistry</c> refuses to start when one of them has drifted.
+            </remarks>
         </member>
         <member name="F:Realm.Ecs.ComponentIds.Position">
             <summary>Position component identifier.</summary>

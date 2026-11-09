@@ -130,6 +130,8 @@ public class MapScript : IWasmModule, ILobbyScript
 	private readonly float[] _reviveAtTimes = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _lastAlertTimes = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
+	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _cinderMarkDamage = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _eliminated = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
@@ -158,6 +160,11 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.RegisterBuffModifier("buff/forced_march", "MovementSpeed", true, 20f);
 		api.RegisterBuffModifier("buff/standard_aura", "MovementSpeed", true, 10f);
 		api.RegisterBuffModifier("buff/cinder_mark", "HpRegen", false, 0f);
+
+		for (int index = 0; index < _lastAlertTimes.Length; index++)
+		{
+			_lastAlertTimes[index] = -UnderAttackAlertCooldownSeconds;
+		}
 
 		api.OnUnitDied += HandleUnitDied;
 		api.OnUnitDamaged += HandleUnitDamaged;
@@ -208,7 +215,7 @@ public class MapScript : IWasmModule, ILobbyScript
 			RefreshRelics(api, player);
 			if (recalculateBulwark) RefreshBulwark(api, player);
 			if (applyIncome) ApplyIncome(api, player, incomeDelta);
-			ApplyCinderMarks(api, player);
+			ApplyCinderMarks(api, player, delta);
 		}
 	}
 
@@ -457,8 +464,17 @@ public class MapScript : IWasmModule, ILobbyScript
 		player.AdjustWood(woodPerMinute * secondsFraction);
 	}
 
-	private void ApplyCinderMarks(IGameAPI api, PlayerId player)
+	/// <summary>
+	///     Burns every enemy the army has marked, for the burn's own rate rather than the tick's damage. Each tick's burn is
+	///     smaller than a whole point of damage, and one hit is never worth less than the combat resolver's floor, so the
+	///     burn is banked per victim and the whole points are dealt as they fill: a tick's worth paid on its own would be
+	///     raised to the floor and the authored rate would arrive several times over. The damage is flagged so re-entering
+	///     the damage callback does not re-mark its victim: a burn that refreshed itself each tick would never end, and the
+	///     2 s burn is meant to run out once the hits stop.
+	/// </summary>
+	private void ApplyCinderMarks(IGameAPI api, PlayerId player, float delta)
 	{
+		if (delta <= 0f) return;
 		if (!IsCinderMarkHero(player.Value)) return;
 
 		int heroEntityId = _heroEntities[player.Value];
@@ -475,7 +491,15 @@ public class MapScript : IWasmModule, ILobbyScript
 			if (api.ArePlayersAllied(unit.Player, player.Value)) continue;
 			if (!unit.HasBuff("buff/cinder_mark")) continue;
 
-			api.DealTypedDamage(hero, unit, CinderMarkDamagePerSecond, "magic");
+			int entityId = unit.UniqueId;
+			float banked = _cinderMarkDamage[entityId] + CinderMarkDamagePerSecond * delta;
+			float whole = MathF.Floor(banked);
+			_cinderMarkDamage[entityId] = banked - whole;
+			if (whole <= 0f) continue;
+
+			_burningFromMark[entityId] = 1;
+			api.DealTypedDamage(hero, unit, whole, "magic");
+			_burningFromMark[entityId] = 0;
 		}
 	}
 
@@ -507,6 +531,9 @@ public class MapScript : IWasmModule, ILobbyScript
 			if (Vector3.DistanceSquared(unit.Position, hero.Position) <= BulwarkSoldierRadius * BulwarkSoldierRadius) nearbySoldiers++;
 		}
 
+		// The bulwark is restated every second and a modifier is appended rather than replaced, so the previous
+		// statement is withdrawn first. Without that the hero would keep last second's soldiers as well as this one's.
+		api.RemoveStatModifiers(hero, "bulwark/hero");
 		api.AddStatModifier(hero, "Armor", false, nearbySoldiers * BulwarkArmorPerSoldier, "bulwark/hero");
 		api.AddStatModifier(hero, "MagicResistance", false, nearbySoldiers * BulwarkMagicResistancePerSoldier, "bulwark/hero");
 
@@ -516,6 +543,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		UnitId nexus = new(nexusEntityId);
 		if (nexus.IsDead) return;
 
+		api.RemoveStatModifiers(nexus, "bulwark/buildings");
 		api.AddStatModifier(nexus, "Armor", false, functionalBuildings * BulwarkArmorPerBuilding, "bulwark/buildings");
 		api.AddStatModifier(nexus, "MagicResistance", false, functionalBuildings * BulwarkMagicResistancePerBuilding, "bulwark/buildings");
 	}
@@ -555,7 +583,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		if (!player.IsActive) return;
 		if (attacker.IsValid && player.IsAlliedWith(attacker.Player)) return;
 
-		if (IsCinderMarkHero(attacker.Player) && attacker.IsHero && !victim.IsBuilding)
+		if (IsCinderMarkHero(attacker.Player) && !victim.IsBuilding && _burningFromMark[victim.UniqueId] == 0)
 		{
 			victim.AddBuff("buff/cinder_mark", 2f);
 		}
@@ -886,8 +914,6 @@ public class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		_deckTakenBuildings |= 1 << profileIndex;
-
 		var position = new Vector3(_draftSitePositionsX[playerIndex], 0f, _draftSitePositionsZ[playerIndex]);
 		UnitId site = _api.SpawnBuildingUnderConstruction(optionId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
 		if (!site.IsValid)
@@ -896,6 +922,10 @@ public class MapScript : IWasmModule, ILobbyScript
 			player.ShowFeedbackText("The site could not be placed there.", new Vector3(1f, 0.3f, 0.25f));
 			return;
 		}
+
+		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
+		// refuse does not cost the deck one of its nine buildings for the rest of the match.
+		_deckTakenBuildings |= 1 << profileIndex;
 
 		player.ShowFeedbackText($"{_api.GetUnitName(optionId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
 		player.PlayClickSound();
