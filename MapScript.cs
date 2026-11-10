@@ -106,6 +106,9 @@ public class MapScript : IWasmModule, ILobbyScript
 	private readonly float[] _rechargeTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _productionTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _lastBadgeValues = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _buildingReadoutSignatures = new int[EcsSharedMemory.MAX_ENTITIES];
+	private string[] _soldierNames = Array.Empty<string>();
+	private string[] _buildingNames = Array.Empty<string>();
 	private readonly byte[] _producing = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _soldierCounts = new int[SoldierProfiles.Length];
 	private readonly int[] _capacityCounts = new int[SoldierProfiles.Length];
@@ -173,6 +176,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.OnConstructionFinished += HandleConstructionFinished;
 
 		RegisterDraftAbilities(api);
+		CacheProfileNames(api);
 		WarnWhenTheBoardIsNotAuthoredForMelee(api);
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
@@ -180,6 +184,22 @@ public class MapScript : IWasmModule, ILobbyScript
 		{
 			if (players[index].Value == 0) continue;
 			ConfigurePlayer(api, players[index]);
+		}
+	}
+
+	/// <summary>
+	///     Reads the names the inspector states for each package once, because a reading is published while the match runs
+	///     and asking the host for a name on that path would allocate a string every time.
+	/// </summary>
+	private void CacheProfileNames(IGameAPI api)
+	{
+		_soldierNames = new string[SoldierProfiles.Length];
+		_buildingNames = new string[SoldierProfiles.Length];
+
+		for (int index = 0; index < SoldierProfiles.Length; index++)
+		{
+			_soldierNames[index] = api.GetUnitName(SoldierProfiles[index].SoldierTemplateId);
+			_buildingNames[index] = api.GetUnitName(SoldierProfiles[index].BuildingTemplateId);
 		}
 	}
 
@@ -407,15 +427,83 @@ public class MapScript : IWasmModule, ILobbyScript
 				_productionTimers[entityId] = profile.ProductionSeconds;
 			}
 
-			if (_producing[entityId] == 0) continue;
+			if (_producing[entityId] != 0)
+			{
+				_productionTimers[entityId] -= delta;
+				if (_productionTimers[entityId] <= 0f)
+				{
+					_producing[entityId] = 0;
+					SpawnSoldier(api, player, profile, building);
+					_charges[entityId] = Math.Max(0, _charges[entityId] - 1);
+					PublishChargeBadge(api, player, building, _charges[entityId]);
+				}
+			}
 
-			_productionTimers[entityId] -= delta;
-			if (_productionTimers[entityId] > 0f) continue;
+			PublishBuildingReadout(api, building, profileIndex, rechargeMultiplier, maximumCharges);
+		}
+	}
 
-			_producing[entityId] = 0;
-			SpawnSoldier(api, player, profile, building);
-			_charges[entityId] = Math.Max(0, _charges[entityId] - 1);
-			PublishChargeBadge(api, player, building, _charges[entityId]);
+	/// <summary>
+	///     States what this building's rules are doing to the inspector, so the charges it holds, how long the next one
+	///     takes, the income it produces and the soldiers it maintains can be compared by every player that selects it and
+	///     not only by the player that owns it. The reading is published when it changes rather than every tick, because
+	///     the remaining recharge is the only part of it that moves and it is read in whole seconds.
+	/// </summary>
+	private void PublishBuildingReadout(IGameAPI api, UnitId building, int profileIndex, float rechargeMultiplier, int maximumCharges)
+	{
+		int entityId = building.UniqueId;
+		int charges = _charges[entityId];
+		float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * rechargeMultiplier;
+		float remainingSeconds = charges >= maximumCharges ? 0f : Math.Max(0f, rechargeSeconds - _rechargeTimers[entityId]);
+		int wholeSeconds = (int)MathF.Ceiling(remainingSeconds);
+		int maintained = _soldierCounts[profileIndex];
+		int capacity = _capacityCounts[profileIndex];
+
+		int signature = 17;
+		signature = signature * 31 + charges;
+		signature = signature * 31 + maximumCharges;
+		signature = signature * 31 + wholeSeconds;
+		signature = signature * 31 + maintained;
+		signature = signature * 31 + capacity;
+		if (_buildingReadoutSignatures[entityId] == signature) return;
+
+		_buildingReadoutSignatures[entityId] = signature;
+
+		BuildingProfile income = FindBuildingProfile(building.TemplateID);
+		float incomePerMinute = income.GoldPerMinute > 0f ? income.GoldPerMinute : income.WoodPerMinute;
+
+		api.SetUnitReadoutRow(building, 0, _soldierNames[profileIndex], ReadoutKind.Label, 0f, 0f);
+		api.SetUnitReadoutRow(building, 1, "Charges", ReadoutKind.Number, charges, maximumCharges);
+		api.SetUnitReadoutRow(building, 2, "Recharge", ReadoutKind.Seconds, remainingSeconds, rechargeSeconds);
+		api.SetUnitReadoutRow(building, 3, "Income", ReadoutKind.PerMinute, incomePerMinute, 0f);
+		api.SetUnitReadoutRow(building, 4, "Capacity", ReadoutKind.Number, maintained, capacity);
+	}
+
+	/// <summary>
+	///     States the buildings an open draft is offering on the hero that drew it, so a player weighing the three options
+	///     and the player across the board see the same reservation: the draft is what a counter is built against, and a
+	///     reservation nobody else can see would make the information incomplete. The reading is cleared when the draft
+	///     closes, because an offer that is no longer open is not a fact about the match any more.
+	/// </summary>
+	private void PublishDraftReadout(int playerIndex)
+	{
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		UnitId hero = new(heroEntityId);
+		if (hero.IsDead) return;
+
+		if (_draftOpen[playerIndex] == 0)
+		{
+			_api.ClearUnitReadouts(hero);
+			return;
+		}
+
+		int optionCount = _draftOptionCounts[playerIndex];
+		for (int index = 0; index < optionCount; index++)
+		{
+			int profileIndex = _draftOptions[playerIndex * DraftOptionCount + index];
+			_api.SetUnitReadoutRow(hero, index, _buildingNames[profileIndex], ReadoutKind.Label, 0f, 0f);
 		}
 	}
 
@@ -1074,6 +1162,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		}
 
 		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, _draftOpen[playerIndex] != 0);
+		PublishDraftReadout(playerIndex);
 	}
 
 	private void SetDraftAbilityVisible(IGameAPI api, int playerIndex, string abilityId, bool visible)

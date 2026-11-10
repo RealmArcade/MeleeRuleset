@@ -859,6 +859,19 @@
             Tracks rotational azimuth heading around the vertical Y-axis in radians.
             </summary>
         </member>
+        <member name="T:Realm.Ecs.Components.Meta.UnitReadout">
+            <summary>
+                Carries the labelled readings a map states about a unit for the inspector: the charges a building holds, how long
+                it takes to regain one, the income it produces and the options it has reserved, so a reading of the rules is
+                available to every player a unit is described to rather than only to the map that keeps it.
+            </summary>
+        </member>
+        <member name="M:Realm.Ecs.Components.Meta.UnitReadout.TrySetRow(System.Int32,System.Int32,Realm.Ecs.ReadoutKind,System.Single,System.Single)">
+            <summary>
+                States one row, keeping every other row as it stands. A row written past the current count extends the
+                readout, and a row that carried no label before is given the one stated here.
+            </summary>
+        </member>
         <member name="T:Realm.Ecs.Components.Movement.AttackMove">
             <summary>
                 Signals that an entity is moving to a destination while attacking enemies on the way.
@@ -3074,6 +3087,32 @@
         </member>
         <member name="F:Realm.Ecs.PlayerRosterSlot.Reserved">
             <summary>Keeps the following slot four-byte aligned.</summary>
+        </member>
+        <member name="T:Realm.Ecs.ReadoutKind">
+            <summary>
+                Describes how a <see cref="T:Realm.Ecs.Components.Meta.UnitReadout" /> row is read, so the inspector can format a
+                value the authority stated without being told by the map what the value means.
+            </summary>
+        </member>
+        <member name="F:Realm.Ecs.ReadoutKind.Number">
+            <summary>A plain count, such as the number of charges a building holds.</summary>
+        </member>
+        <member name="F:Realm.Ecs.ReadoutKind.Seconds">
+            <summary>A duration in seconds, such as how long a building takes to regain one charge.</summary>
+        </member>
+        <member name="F:Realm.Ecs.ReadoutKind.PerMinute">
+            <summary>A rate per minute, such as the gold or wood a building produces.</summary>
+        </member>
+        <member name="F:Realm.Ecs.ReadoutKind.Percent">
+            <summary>
+                A share between zero and one, drawn as a percentage, such as how much of an ability's cooldown is left.
+            </summary>
+        </member>
+        <member name="F:Realm.Ecs.ReadoutKind.Label">
+            <summary>
+                A label with no reading of its own, such as the name of a drafted option a building has reserved. The value
+                and the secondary value are not shown.
+            </summary>
         </member>
         <member name="T:Realm.Ecs.ResourceNodeId">
             <summary>

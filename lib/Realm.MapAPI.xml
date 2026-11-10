@@ -2744,11 +2744,58 @@
             <see cref="M:Realm.MapAPI.IGameAPI.SetUnitHideHealthAndManaBars(Realm.Ecs.UnitId,System.Boolean)"/> hides the bars of, which is what makes a badge for a board square
             possible, and it draws only when the map shows badges at all through <see cref="M:Realm.MapAPI.IGameAPI.SetUnitBarVisibility(System.Boolean,System.Boolean,System.Boolean)"/>.
             The badge lives on the unit entity, so it follows the unit through element swaps, level changes and swaps of two
-            units' places, and it is gone when the entity is destroyed. A value of zero or below hides it.
+            units' places, and it is gone when the entity is destroyed. A value of zero draws zero, because a count that has
+            run out is still something the board states, and a negative value hides the badge.
             </remarks>
             <param name="unit">The unit identifier.</param>
-            <param name="value">The number to draw above a zero-hiding threshold, from 1 to 999.</param>
+            <param name="value">The number to draw, from 0 to 999, or a negative value to draw no badge at all.</param>
             <param name="color">The tint of the badge, in the same 0-1 channel range as every other colour a map gives.</param>
+        </member>
+        <member name="M:Realm.MapAPI.IGameAPI.SetUnitReadoutRow(Realm.Ecs.UnitId,System.Int32,System.String,Realm.Ecs.ReadoutKind,System.Single,System.Single)">
+            <summary>
+            States one row of a unit's inspector readings, which is how a map publishes a number it keeps itself so that the
+            inspector can show it to everybody the unit is described to.
+            </summary>
+            <remarks>
+            The inspector shows the engine's own readings of a unit from the components it publishes, and a rule that lives in
+            the map script - how many charges a building holds, how long it takes to regain one, what income it produces, which
+            drafted building it has reserved - has no component of its own to be read from. A readout row is the component for
+            exactly that: the map states a label and a reading, the authority replicates them with the unit, and the inspector
+            draws them beside the engine's readings for every player, not only for the player that owns the unit.
+            <para>
+            Rows are indexed from zero and a row is shown in the order it was written, up to
+            <see cref="F:Realm.Ecs.Components.Meta.UnitReadout.MaximumRows"/> rows. Writing a row keeps every other row as it
+            stands, so a map writes only the reading that changed. The label is free text and is shown as the map stated it; a
+            map that wants a translated label translates it itself, exactly as it would for a unit's name. A row written as
+            <see cref="F:Realm.Ecs.ReadoutKind.Label"/> states only the label, which is how a reserved option is named without
+            inventing a number for it.
+            </para>
+            <para>
+            The readout is a component of the unit, so it is replicated on the frame it changes, it follows the unit through
+            swaps of place and it is gone with the entity. <see cref="M:Realm.MapAPI.IGameAPI.ClearUnitReadouts(Realm.Ecs.UnitId)"/> is what removes it when the map has
+            nothing left to state.
+            </para>
+            </remarks>
+            <param name="unit">The unit identifier.</param>
+            <param name="row">The row to write, from 0 to one less than the maximum row count.</param>
+            <param name="label">The label shown for the reading, as the map wants it shown.</param>
+            <param name="kind">How the reading is formatted, which decides the unit its value is drawn with.</param>
+            <param name="value">The reading itself.</param>
+            <param name="secondaryValue">
+            A second reading drawn beside the first, such as a maximum beside a current count; it is ignored by
+            <see cref="F:Realm.Ecs.ReadoutKind.Label"/>.
+            </param>
+        </member>
+        <member name="M:Realm.MapAPI.IGameAPI.ClearUnitReadouts(Realm.Ecs.UnitId)">
+            <summary>
+            Removes every inspector reading a unit was stating.
+            </summary>
+            <remarks>
+            The engine's own readings of a unit are unaffected: this removes only what the map published through
+            <see cref="M:Realm.MapAPI.IGameAPI.SetUnitReadoutRow(Realm.Ecs.UnitId,System.Int32,System.String,Realm.Ecs.ReadoutKind,System.Single,System.Single)"/>, which is what a map does when the rule that stated them no longer applies to the
+            unit.
+            </remarks>
+            <param name="unit">The unit identifier.</param>
         </member>
         <member name="M:Realm.MapAPI.IGameAPI.IssueAttackOrder(Realm.Ecs.UnitId,Realm.Ecs.UnitId)">
             <summary>
