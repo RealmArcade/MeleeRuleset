@@ -76,26 +76,6 @@ public class MapScript : IWasmModule, ILobbyScript
 		"item/muster_bell"
 	};
 
-	private static readonly Vector2[] SpawnAnchors =
-	{
-		new(-58f, -58f),
-		new(58f, -58f),
-		new(-58f, 92f),
-		new(58f, 92f)
-	};
-
-	private static readonly Vector2[] GoldNodePositions =
-	{
-		new(-44f, -58f), new(44f, -58f), new(-44f, 92f), new(44f, 92f),
-		new(-20f, 15f), new(20f, 15f)
-	};
-
-	private static readonly Vector2[] WoodNodePositions =
-	{
-		new(-58f, -44f), new(58f, -44f), new(-58f, 106f), new(58f, 106f),
-		new(0f, -40f), new(0f, 70f)
-	};
-
 	private static readonly SoldierProfile[] SoldierProfiles =
 	{
 		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 5f, true),
@@ -193,6 +173,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.OnConstructionFinished += HandleConstructionFinished;
 
 		RegisterDraftAbilities(api);
+		WarnWhenTheBoardIsNotAuthoredForMelee(api);
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
 		for (int index = 0; index < players.Length; index++)
@@ -200,8 +181,17 @@ public class MapScript : IWasmModule, ILobbyScript
 			if (players[index].Value == 0) continue;
 			ConfigurePlayer(api, players[index]);
 		}
+	}
 
-		SpawnResourceNodes(api);
+	private static void WarnWhenTheBoardIsNotAuthoredForMelee(IGameAPI api)
+	{
+		bool hasAnchors = api.GetSpawnAnchorCount() > 0;
+		bool hasResourceNodes = api.GetResourceNodes().Length > 0;
+		if (hasAnchors && hasResourceNodes) return;
+
+		api.ShowFeedbackText(
+			"This board does not seat Melee: it declares no spawn anchors or places no resource nodes.",
+			new Vector3(1f, 0.4f, 0.3f));
 	}
 
 	public void Update(IGameAPI api, float delta)
@@ -278,7 +268,14 @@ public class MapScript : IWasmModule, ILobbyScript
 		player.MaxPopulation = MaximumPopulation;
 		api.SetPlayerBuildingLimit(playerIndex, MaximumBuildingsPerPlayer + 1);
 
-		Vector2 anchor = SpawnAnchors[Math.Clamp(playerIndex - 1, 0, SpawnAnchors.Length - 1)];
+		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
+		if (spawnAnchor == Vector3.Zero)
+		{
+			player.ShowFeedbackText("This board declares no spawn anchor for your slot.", new Vector3(1f, 0.4f, 0.3f));
+			return;
+		}
+
+		var anchor = new Vector2(spawnAnchor.X, spawnAnchor.Z);
 		_nexusPositionsX[playerIndex] = anchor.X;
 		_nexusPositionsZ[playerIndex] = anchor.Y;
 
@@ -299,21 +296,6 @@ public class MapScript : IWasmModule, ILobbyScript
 
 		player.PanCameraTo(new Vector3(anchor.X, 0f, anchor.Y), 0f);
 		player.ShowFeedbackText($"{HeroFactionNames[heroTemplateIndex]} answers the call.", new Vector3(0.85f, 0.95f, 1f));
-	}
-
-	private void SpawnResourceNodes(IGameAPI api)
-	{
-		for (int index = 0; index < GoldNodePositions.Length; index++)
-		{
-			Vector2 position = GoldNodePositions[index];
-			api.SpawnResourceNode(GoldNodeTemplateId, new Vector3(position.X, 0f, position.Y), 5000f);
-		}
-
-		for (int index = 0; index < WoodNodePositions.Length; index++)
-		{
-			Vector2 position = WoodNodePositions[index];
-			api.SpawnResourceNode(WoodNodeTemplateId, new Vector3(position.X, 0f, position.Y), 4000f);
-		}
 	}
 
 	private void UpdateArmyLevel(IGameAPI api, PlayerId player)
