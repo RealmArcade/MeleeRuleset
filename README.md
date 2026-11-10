@@ -2,23 +2,23 @@
 
 A map package that implements the melee ruleset from the design documents: each player owns one hero, an identical Nexus, and a set of buildings that raise an autonomous army from their own charges. Terrain is not authored here; the package is composed over another map's terrain.
 
-## Composition
+## Referenced maps
 
-`composite.manifest.json` is this map's composition descriptor: the sub-archives it wires in and the rule each of their files lands under. The editor offers it the next time the map is opened, and the export writes the same file into the package it produces.
+`references.json` names the maps this one takes content from. It is not a package format: every save writes the referenced content into this folder, so this stays an ordinary editable map and testing, exporting, publishing and playing all read one folder.
 
-| Sub-archive | Rule | Why |
-| :--- | :--- | :--- |
-| Secluded Crest v1.0.0 (`cc2b97b2…`) | `Overwrite`, with `metadata.json` set to `Union` | The ruleset authors no terrain and no models, so the sub-archive's `terrain.json`, terrain images and `.rmesh` models become this package's. The two maps' `metadata.json` are united instead of one replacing the other, so both maps' templates survive. |
+| Referenced map | What it contributes |
+| :--- | :--- |
+| Secluded Crest v1.0.0 (`cc2b97b2…`) | Everything this map does not carry itself: `terrain.json`, its height field, the terrain images, the props, and the `.rmesh` models and environment settings its `metadata.json` declares. |
 
-`composite.metadata.json` settles the keys the metadata union cannot: `GameBuildNumber`, and the `MapProperties` keys both maps declare differently (the name, description, author, suggested players, shroud, tags, map type, playable slots and the how-to-play text). A value in that file is written verbatim in place of both maps' values, so the ruleset's own identity and full-information shroud win without any hard-coded rule, while every property neither map contradicts (the camera bounds, the environment and terrain settings, and the sub-archive's models) still arrives from the terrain map.
+`metadata.json` is always merged: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and a value both maps declare carries this map's own, because this map merges last. That keeps the ruleset's identity, its `GameBuildNumber` and its full-information shroud, while the terrain map's models, environment, skyboxes and props arrive beside them.
 
-Composition is flat and one layer deep: Secluded Crest is a primitive map, and nothing composes a composition.
+Every other file comes whole from exactly one map. A file only one map carries is that map's, and a file both carry is kept from this map unless `references.json` states a priority for it. The nine files both maps carry here are this map's own build and identity - `MapScript.cs`, `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md`, `.gitignore` - so none of them needs a priority.
 
 ### Prerequisites
 
-* Secluded Crest v1.0.0 must be present in the local map store before the package can be planned or played, because sub-archives are resolved by name, version and pinned manifest hash rather than by folder path.
-* The editor's **Composite Map** menu plans the composition, validates the union and the resolution, and exports the `.rmap`. The descriptor is rewritten from whatever the dialog holds when an export succeeds.
-* The exported package carries this map's own files, the descriptor and the resolution. A client that plays it downloads the sub-archive and hard-links the union of both packages into the composite's folder before the match can start.
+* On a save, a referenced map is read from the helper folder `references.json` names while that folder exists, and otherwise from the map store by name, version and pinned manifest hash. Its `FolderPath` here points at the sibling `ugc-SecludedCrest` checkout.
+* Files taken from a referenced map are made read-only in this folder. Editing one is reverted by the next save, which reports every file it replaced.
+* `metadata.partial.json` holds the keys this map overrides in the merge. It is regenerated on every save by diffing this map's metadata against the merge of the referenced maps, so upgrading Secluded Crest to a new version and re-saving drops the old version's data instead of carrying it forward.
 
 ## What the script implements
 

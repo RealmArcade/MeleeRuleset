@@ -1,0 +1,12 @@
+{
+  "FormatVersion": 1,
+  "References": [
+    {
+      "MapName": "Secluded Crest",
+      "Version": "1.0.0",
+      "ManifestBlake3": "cc2b97b2dba48a3442dde8d00a47b90947d72e735678ea516f33a89619ae2dc3",
+      "FolderPath": "D:/git/Realm/ugc-SecludedCrest"
+    }
+  ],
+  "ConflictPriorities": {}
+}
