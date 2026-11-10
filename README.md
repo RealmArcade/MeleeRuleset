@@ -1,24 +1,24 @@
 # Melee Ruleset
 
-A map package that implements the melee ruleset from the design documents: each player owns one hero, an identical Nexus, and a set of buildings that raise an autonomous army from their own charges. Terrain is not authored here; the package is composed over another map's terrain.
+The rules package of the melee game from the design documents: each player owns one hero, an identical Nexus, and a set of buildings that raise an autonomous army from their own charges. It authors rules, not a board.
 
-## Referenced maps
+## Referenced by the board
 
-`references.json` names the maps this one takes content from. It is not a package format: every save writes the referenced content into this folder, so this stays an ordinary editable map and testing, exporting, publishing and playing all read one folder.
+The `ugc-SecludedCrest` repository is the composing map: its `references.json` names this map, and every save of it takes this map's files into its own folder, so the board becomes one ordinary playable map. Nothing has to be composed here, and this folder is never the map that is played.
 
-| Referenced map | What it contributes |
+| Into | What this map contributes |
 | :--- | :--- |
-| Secluded Crest v1.0.0 (`cc2b97b2…`) | Everything this map does not carry itself: `terrain.json`, its height field, the terrain images, the props, and the `.rmesh` models and environment settings its `metadata.json` declares. |
+| Secluded Crest v1.0.0 | `MapScript.cs`, the rules script itself, and the melee templates this map's `metadata.json` declares - units, buildings, abilities and relics - plus the factions, deck and economy the script runs. |
 
-`metadata.json` is always merged: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and a value both maps declare carries this map's own, because this map merges last. That keeps the ruleset's identity, its `GameBuildNumber` and its full-information shroud, while the terrain map's models, environment, skyboxes and props arrive beside them.
+`metadata.json` here is merged into the board's: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and the board merges last, so the board's own identity, build number, shroud and camera stand while the rules, units, abilities and relics arrive from here.
 
-Every other file comes whole from exactly one map. A file only one map carries is that map's, and a file both carry is kept from this map unless `references.json` states a priority for it. The nine files both maps carry here are this map's own build and identity - `MapScript.cs`, `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md`, `.gitignore` - so none of them needs a priority.
+Every other file comes whole from exactly one map. `MapScript.cs` is the one file the board's `references.json` states comes from this map, because the ruleset is defined here; `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md` and `.gitignore` are kept by the board, which builds and maintains its own copies. `MapTemplates.g.cs` and `WasmEntryPoint.g.cs` are never taken from a referenced map at all.
 
 ### Prerequisites
 
-* On a save, a referenced map is read from the helper folder `references.json` names while that folder exists, and otherwise from the map store by name, version and pinned manifest hash. Its `FolderPath` here points at the sibling `ugc-SecludedCrest` checkout.
-* Files taken from a referenced map are made read-only in this folder. Editing one is reverted by the next save, which reports every file it replaced.
-* `metadata.partial.json` holds the keys this map overrides in the merge. It is regenerated on every save by diffing this map's metadata against the merge of the referenced maps, so upgrading Secluded Crest to a new version and re-saving drops the old version's data instead of carrying it forward.
+* The board reads this map from `FolderPath` in its `references.json` while that folder exists, and otherwise from the map store by name, version and this map's pinned manifest hash.
+* `manifest.json` here is the package manifest that pin names. Regenerate it with `MapManifest.CreateFromDirectory` whenever this map's content changes, then repin the board's reference to the new `ComputeManifestBlake3()`.
+* `lib/` and `bin/` are this map's own workspace. The board compiles its script in its own folder from the files it takes, so the `.wasm` the game runs is never the one built here.
 
 ## What the script implements
 
