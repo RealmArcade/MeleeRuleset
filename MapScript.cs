@@ -5,17 +5,19 @@ using System.Numerics;
 using Realm.Ecs;
 using Realm.MapAPI;
 
-public class MapScript : IWasmModule, ILobbyScript
+public partial class MapScript : IWasmModule, ILobbyScript
 {
 	private const string NexusTemplateId = "building/nexus";
 	private const string GoldNodeTemplateId = "resource/melee_gold_mine";
 	private const string WoodNodeTemplateId = "resource/melee_woodland";
 
-	private const int MaximumBuildingsPerPlayer = 5;
+	private const int DefaultMaximumBuildingsPerPlayer = 5;
+	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
 	private const float BuildingWoodCost = 100f;
-	private const int DraftOptionCount = 3;
+	private const int DefaultDraftOptionCount = 3;
+	private const int MaximumDraftOptions = 24;
 	private const int DraftRow = 1;
 	private const int DraftAbandonSlot = 3;
 	private const int MaximumPopulation = 80;
@@ -102,27 +104,35 @@ public class MapScript : IWasmModule, ILobbyScript
 		new("building/vigil_bastion", 10f, 0f)
 	};
 
-	private readonly int[] _charges = new int[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _rechargeTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _productionTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _lastBadgeValues = new int[EcsSharedMemory.MAX_ENTITIES];
-	private readonly int[] _buildingReadoutSignatures = new int[EcsSharedMemory.MAX_ENTITIES];
-	private string[] _soldierNames = Array.Empty<string>();
-	private string[] _buildingNames = Array.Empty<string>();
 	private readonly byte[] _producing = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _soldierCounts = new int[SoldierProfiles.Length];
 	private readonly int[] _capacityCounts = new int[SoldierProfiles.Length];
 
 	private static readonly float[] ConstructionSecondsByProfile = { 30f, 30f, 30f, 30f, 30f, 30f, 35f, 35f, 35f };
 
-	private static readonly string[] DraftHotkeys = { "Z", "X", "C" };
+	private static readonly string[] DraftHotkeys =
+	{
+		"Z", "X", "C", "A", "S", "D", "F", "G", "Q", "W", "E", "R",
+		"T", "Y", "U", "I", "O", "P", "J", "K", "L", "N", "M", "B"
+	};
 
 	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
-	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * DraftOptionCount];
+	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * MaximumDraftOptions];
 	private readonly float[] _draftSitePositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _draftSitePositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
 	private int _deckTakenBuildings;
+
+	// The parameters the lobby's host set for this match. Each one starts at the value the ruleset itself states and is
+	// replaced only when the host configured it, so a lobby that touched nothing plays the authored ruleset.
+	private int _maximumBuildingsPerPlayer = DefaultMaximumBuildingsPerPlayer;
+	private int _draftOptionsPerDraw = DefaultDraftOptionCount;
+	private float _capacityMultiplier = 1f;
+	private float _chargeMultiplier = 1f;
+	private bool _mirroredDraft;
+	private bool _openPoolDrafting;
 
 	private readonly int[] _heroEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _nexusEntities = new int[EcsSharedMemory.MAX_PLAYERS];
@@ -147,6 +157,7 @@ public class MapScript : IWasmModule, ILobbyScript
 	public void Initialize(IGameAPI api)
 	{
 		_api = api;
+		ReadMatchOptions(api);
 
 		api.SetUnitBarVisibility(true, true, true);
 		api.RegisterPrimaryBuilding(NexusTemplateId);
@@ -176,7 +187,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		api.OnConstructionFinished += HandleConstructionFinished;
 
 		RegisterDraftAbilities(api);
-		CacheProfileNames(api);
+		InitializeDamageAffinity(api);
 		WarnWhenTheBoardIsNotAuthoredForMelee(api);
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
@@ -184,22 +195,6 @@ public class MapScript : IWasmModule, ILobbyScript
 		{
 			if (players[index].Value == 0) continue;
 			ConfigurePlayer(api, players[index]);
-		}
-	}
-
-	/// <summary>
-	///     Reads the names the inspector states for each package once, because a reading is published while the match runs
-	///     and asking the host for a name on that path would allocate a string every time.
-	/// </summary>
-	private void CacheProfileNames(IGameAPI api)
-	{
-		_soldierNames = new string[SoldierProfiles.Length];
-		_buildingNames = new string[SoldierProfiles.Length];
-
-		for (int index = 0; index < SoldierProfiles.Length; index++)
-		{
-			_soldierNames[index] = api.GetUnitName(SoldierProfiles[index].SoldierTemplateId);
-			_buildingNames[index] = api.GetUnitName(SoldierProfiles[index].BuildingTemplateId);
 		}
 	}
 
@@ -229,6 +224,8 @@ public class MapScript : IWasmModule, ILobbyScript
 			ApplyAutoCasts(api, player, delta);
 			AdvanceOwnConstruction(api, player, delta);
 		}
+
+		UpdateDamageAffinity(api, delta);
 
 		_bulwarkTimer += delta;
 		bool recalculateBulwark = _bulwarkTimer >= BulwarkRecalculateSeconds;
@@ -286,7 +283,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		player.Wood = StartingWood;
 		player.Stone = 0f;
 		player.MaxPopulation = MaximumPopulation;
-		api.SetPlayerBuildingLimit(playerIndex, MaximumBuildingsPerPlayer + 1);
+		api.SetPlayerBuildingLimit(playerIndex, _maximumBuildingsPerPlayer + 1);
 
 		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
 		if (spawnAnchor == Vector3.Zero)
@@ -384,7 +381,7 @@ public class MapScript : IWasmModule, ILobbyScript
 			if (unit.IsBuilding)
 			{
 				int grantedProfile = FindProfileIndexByBuilding(unit.TemplateID);
-				if (grantedProfile >= 0) _capacityCounts[grantedProfile] += SoldierProfiles[grantedProfile].Capacity;
+				if (grantedProfile >= 0) _capacityCounts[grantedProfile] += ScaledCapacity(grantedProfile);
 				continue;
 			}
 
@@ -406,22 +403,19 @@ public class MapScript : IWasmModule, ILobbyScript
 
 			SoldierProfile profile = SoldierProfiles[profileIndex];
 			int entityId = building.UniqueId;
-			int maximumCharges = profile.MaximumCharges + extraCharges;
+			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
+			float rechargeSeconds = profile.RechargeSeconds * rechargeMultiplier;
 
-			if (_charges[entityId] < maximumCharges)
+			if (building.MaximumCharges != maximumCharges || building.ChargeRechargeSeconds != rechargeSeconds)
 			{
-				_rechargeTimers[entityId] += delta;
-				float rechargeSeconds = profile.RechargeSeconds * rechargeMultiplier;
-				if (_rechargeTimers[entityId] >= rechargeSeconds)
-				{
-					_rechargeTimers[entityId] -= rechargeSeconds;
-					_charges[entityId]++;
-					PublishChargeBadge(api, player, building, _charges[entityId]);
-				}
+				api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
 			}
 
+			int charges = building.Charges;
+			PublishChargeBadge(api, player, building, charges);
+
 			int reservedCapacity = _soldierCounts[profileIndex] + (_producing[entityId] != 0 ? 1 : 0);
-			if (_producing[entityId] == 0 && _charges[entityId] > 0 && reservedCapacity < _capacityCounts[profileIndex])
+			if (_producing[entityId] == 0 && charges > 0 && reservedCapacity < _capacityCounts[profileIndex])
 			{
 				_producing[entityId] = 1;
 				_productionTimers[entityId] = profile.ProductionSeconds;
@@ -434,76 +428,11 @@ public class MapScript : IWasmModule, ILobbyScript
 				{
 					_producing[entityId] = 0;
 					SpawnSoldier(api, player, profile, building);
-					_charges[entityId] = Math.Max(0, _charges[entityId] - 1);
-					PublishChargeBadge(api, player, building, _charges[entityId]);
+					int spent = Math.Max(0, building.Charges - 1);
+					api.SetUnitChargeCount(building, spent);
+					PublishChargeBadge(api, player, building, spent);
 				}
 			}
-
-			PublishBuildingReadout(api, building, profileIndex, rechargeMultiplier, maximumCharges);
-		}
-	}
-
-	/// <summary>
-	///     States what this building's rules are doing to the inspector, so the charges it holds, how long the next one
-	///     takes, the income it produces and the soldiers it maintains can be compared by every player that selects it and
-	///     not only by the player that owns it. The reading is published when it changes rather than every tick, because
-	///     the remaining recharge is the only part of it that moves and it is read in whole seconds.
-	/// </summary>
-	private void PublishBuildingReadout(IGameAPI api, UnitId building, int profileIndex, float rechargeMultiplier, int maximumCharges)
-	{
-		int entityId = building.UniqueId;
-		int charges = _charges[entityId];
-		float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * rechargeMultiplier;
-		float remainingSeconds = charges >= maximumCharges ? 0f : Math.Max(0f, rechargeSeconds - _rechargeTimers[entityId]);
-		int wholeSeconds = (int)MathF.Ceiling(remainingSeconds);
-		int maintained = _soldierCounts[profileIndex];
-		int capacity = _capacityCounts[profileIndex];
-
-		int signature = 17;
-		signature = signature * 31 + charges;
-		signature = signature * 31 + maximumCharges;
-		signature = signature * 31 + wholeSeconds;
-		signature = signature * 31 + maintained;
-		signature = signature * 31 + capacity;
-		if (_buildingReadoutSignatures[entityId] == signature) return;
-
-		_buildingReadoutSignatures[entityId] = signature;
-
-		BuildingProfile income = FindBuildingProfile(building.TemplateID);
-		float incomePerMinute = income.GoldPerMinute > 0f ? income.GoldPerMinute : income.WoodPerMinute;
-
-		api.SetUnitReadoutRow(building, 0, _soldierNames[profileIndex], ReadoutKind.Label, 0f, 0f);
-		api.SetUnitReadoutRow(building, 1, "Charges", ReadoutKind.Number, charges, maximumCharges);
-		api.SetUnitReadoutRow(building, 2, "Recharge", ReadoutKind.Seconds, remainingSeconds, rechargeSeconds);
-		api.SetUnitReadoutRow(building, 3, "Income", ReadoutKind.PerMinute, incomePerMinute, 0f);
-		api.SetUnitReadoutRow(building, 4, "Capacity", ReadoutKind.Number, maintained, capacity);
-	}
-
-	/// <summary>
-	///     States the buildings an open draft is offering on the hero that drew it, so a player weighing the three options
-	///     and the player across the board see the same reservation: the draft is what a counter is built against, and a
-	///     reservation nobody else can see would make the information incomplete. The reading is cleared when the draft
-	///     closes, because an offer that is no longer open is not a fact about the match any more.
-	/// </summary>
-	private void PublishDraftReadout(int playerIndex)
-	{
-		int heroEntityId = _heroEntities[playerIndex];
-		if (heroEntityId <= 0) return;
-
-		UnitId hero = new(heroEntityId);
-		if (hero.IsDead) return;
-
-		if (_draftOpen[playerIndex] == 0)
-		{
-			_api.ClearUnitReadouts(hero);
-			return;
-		}
-
-		int optionCount = _draftOptionCounts[playerIndex];
-		for (int index = 0; index < optionCount; index++)
-		{
-			int profileIndex = _draftOptions[playerIndex * DraftOptionCount + index];
-			_api.SetUnitReadoutRow(hero, index, _buildingNames[profileIndex], ReadoutKind.Label, 0f, 0f);
 		}
 	}
 
@@ -769,18 +698,15 @@ public class MapScript : IWasmModule, ILobbyScript
 		int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
 		if (profileIndex < 0) return;
 
-		int entityId = building.UniqueId;
 		int extraCharges = IsStandingLedgerHero(playerIndex) ? 1 : 0;
-		_charges[entityId] = SoldierProfiles[profileIndex].MaximumCharges > 0 ? 1 : 0;
-		_rechargeTimers[entityId] = 0f;
+		int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
+		float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
 
 		PlayerId player = _api.GetPlayer(playerIndex);
-		PublishChargeBadge(_api, player, building, _charges[entityId]);
+		_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
+		_api.SetUnitChargeCount(building, ScaledMaximumCharges(profileIndex) > 0 ? 1 : 0);
+		PublishChargeBadge(_api, player, building, building.Charges);
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
-
-		if (extraCharges <= 0) return;
-
-		_charges[entityId] = Math.Min(_charges[entityId], SoldierProfiles[profileIndex].MaximumCharges + extraCharges);
 	}
 
 	private void HandleUnitDamaged(UnitId victim, UnitId attacker, float damage)
@@ -858,6 +784,12 @@ public class MapScript : IWasmModule, ILobbyScript
 		player.PlayWarningSound();
 	}
 
+	/// <summary>
+	///     Ends a seat's game when its Nexus falls, unless an allied seat still holds one. Declared allies are one group
+	///     for every team-level rule, and elimination is one of them: a seat whose base is gone keeps its army and keeps
+	///     playing while its ally's Nexus stands, and only the loss of the team's last Nexus ends every seat on it.
+	/// </summary>
+	/// <param name="nexus">The Nexus that was destroyed.</param>
 	private void HandleNexusDestroyed(UnitId nexus)
 	{
 		int playerIndex = nexus.Player;
@@ -866,9 +798,45 @@ public class MapScript : IWasmModule, ILobbyScript
 		_eliminated[playerIndex] = 1;
 		AbandonOpenDraft(playerIndex);
 
-		PlayerId player = _api.GetPlayer(playerIndex);
-		player.TriggerDefeat("Your Nexus has been destroyed.");
+		int team = _api.GetPlayer(playerIndex).Team;
+		if (!TeamHoldsANexus(team, playerIndex))
+		{
+			ReadOnlySpan<PlayerId> players = _api.GetActivePlayers();
+			for (int index = 0; index < players.Length; index++)
+			{
+				PlayerId member = players[index];
+				if (member.Value <= 0 || !member.IsActive) continue;
+				if (member.Team != team) continue;
+
+				member.TriggerDefeat("Your Nexus has been destroyed.");
+			}
+		}
+
 		CheckTeamVictory();
+	}
+
+	/// <summary>
+	///     Answers whether any seat on a team still has its Nexus standing. The seat whose Nexus has just fallen is left
+	///     out, because the death of a Nexus is reported while its unit is still standing and asking the world about it
+	///     would say the team still holds the base that was just destroyed.
+	/// </summary>
+	/// <param name="team">The team to look at.</param>
+	/// <param name="fallenSeat">The seat whose Nexus this is.</param>
+	/// <returns>Whether another Nexus that belongs to that team is on the board.</returns>
+	private bool TeamHoldsANexus(int team, int fallenSeat)
+	{
+		ReadOnlySpan<PlayerId> players = _api.GetActivePlayers();
+		for (int index = 0; index < players.Length; index++)
+		{
+			PlayerId player = players[index];
+			if (player.Value <= 0 || !player.IsActive) continue;
+			if (player.Value == fallenSeat) continue;
+			if (player.Team != team) continue;
+			if (_nexusEntities[player.Value] <= 0) continue;
+			if (!new UnitId(_nexusEntities[player.Value]).IsDead) return true;
+		}
+
+		return false;
 	}
 
 	private void CheckTeamVictory()
@@ -976,10 +944,15 @@ public class MapScript : IWasmModule, ILobbyScript
 			if (profileIndex < 0) continue;
 			if (!IsBuildingOperational(_api, building)) continue;
 
-			int entityId = building.UniqueId;
-			int maximumCharges = SoldierProfiles[profileIndex].MaximumCharges + extraCharges;
-			_charges[entityId] = Math.Min(maximumCharges, _charges[entityId] + 1);
-			PublishChargeBadge(_api, player, building, _charges[entityId]);
+			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
+			float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
+			if (building.MaximumCharges != maximumCharges || building.ChargeRechargeSeconds != rechargeSeconds)
+			{
+				_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
+			}
+
+			_api.SetUnitChargeCount(building, Math.Min(maximumCharges, building.Charges + 1));
+			PublishChargeBadge(_api, player, building, building.Charges);
 		}
 	}
 
@@ -997,10 +970,11 @@ public class MapScript : IWasmModule, ILobbyScript
 			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
 			if (profileIndex < 0) continue;
 
-			int entityId = building.UniqueId;
-			_charges[entityId] = SoldierProfiles[profileIndex].MaximumCharges + extraCharges;
-			_rechargeTimers[entityId] = 0f;
-			PublishChargeBadge(api, player, building, _charges[entityId]);
+			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
+			float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
+			api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
+			api.SetUnitChargeCount(building, maximumCharges);
+			PublishChargeBadge(api, player, building, building.Charges);
 		}
 	}
 
@@ -1017,9 +991,9 @@ public class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		if (_api.GetPlayerBuildingCount(playerIndex) > MaximumBuildingsPerPlayer)
+		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer)
 		{
-			player.ShowFeedbackText($"All {MaximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
+			player.ShowFeedbackText($"All {_maximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
@@ -1044,15 +1018,67 @@ public class MapScript : IWasmModule, ILobbyScript
 
 		for (int index = 0; index < optionCount; index++)
 		{
-			string templateId = SoldierProfiles[_draftOptions[playerIndex * DraftOptionCount + index]].BuildingTemplateId;
+			string templateId = SoldierProfiles[_draftOptions[playerIndex * MaximumDraftOptions + index]].BuildingTemplateId;
 			_api.SetAbilityGridPosition(templateId, index, DraftRow);
 			_api.SetAbilityHotkey(templateId, DraftHotkeys[index]);
 		}
 
 		ApplyDraftAbilityState(_api, playerIndex);
 
-		player.ShowFeedbackText("Three buildings are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
+		player.ShowFeedbackText($"{optionCount} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
 		_api.SpawnExpandingGroundRing(new Vector3(position.X, 0f, position.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
+	}
+
+	/// <summary>
+	///     Reads the parameters the lobby's host configured for this match, so a host can seat more players, offer more or
+	///     fewer building options per draw, allow more copies of one building, multiply capacity and charges, and switch on
+	///     mirrored drafting or an open building pool. Every one of them falls back to the value this ruleset states, which
+	///     is what a lobby that touched nothing plays.
+	/// </summary>
+	/// <param name="api">The game API the match runs through.</param>
+	private void ReadMatchOptions(IGameAPI api)
+	{
+		int draftOptions = api.GetMatchOption(MatchOption.MaximumBuildingDraftCount);
+		_draftOptionsPerDraw = draftOptions > 0 ? Math.Clamp(draftOptions, 1, MaximumDraftOptions) : DefaultDraftOptionCount;
+
+		int buildingLimit = api.GetMatchOption(MatchOption.MaximumUniqueBuildingInstances);
+		_maximumBuildingsPerPlayer = buildingLimit > 0 ? Math.Clamp(buildingLimit, 1, MaximumBuildingLimit) : DefaultMaximumBuildingsPerPlayer;
+
+		int capacityPercent = api.GetMatchOption(MatchOption.CapacityMultiplierPercent);
+		_capacityMultiplier = capacityPercent > 0 ? capacityPercent / 100f : 1f;
+
+		int chargePercent = api.GetMatchOption(MatchOption.ChargeMultiplierPercent);
+		_chargeMultiplier = chargePercent > 0 ? chargePercent / 100f : 1f;
+
+		_mirroredDraft = api.GetMatchOption(MatchOption.MirroredAutoDraft) != 0;
+		_openPoolDrafting = api.GetMatchOption(MatchOption.OpenPoolDrafting) != 0;
+	}
+
+	/// <summary>
+	///     Answers how many soldiers of one profile a building of that profile supports, after the host's capacity
+	///     multiplier has been applied.
+	/// </summary>
+	/// <param name="profileIndex">The index of the soldier profile in <see cref="SoldierProfiles" />.</param>
+	/// <returns>The capacity one building of that profile grants.</returns>
+	private int ScaledCapacity(int profileIndex)
+	{
+		int capacity = SoldierProfiles[profileIndex].Capacity;
+		if (_capacityMultiplier == 1f) return capacity;
+
+		return Math.Max(1, (int)MathF.Round(capacity * _capacityMultiplier));
+	}
+
+	/// <summary>
+	///     Answers how many charges a building of one profile holds, after the host's charge multiplier has been applied.
+	/// </summary>
+	/// <param name="profileIndex">The index of the soldier profile in <see cref="SoldierProfiles" />.</param>
+	/// <returns>The maximum charges one building of that profile holds.</returns>
+	private int ScaledMaximumCharges(int profileIndex)
+	{
+		int charges = SoldierProfiles[profileIndex].MaximumCharges;
+		if (_chargeMultiplier == 1f) return charges;
+
+		return Math.Max(1, (int)MathF.Round(charges * _chargeMultiplier));
 	}
 
 	/// <summary>
@@ -1070,10 +1096,16 @@ public class MapScript : IWasmModule, ILobbyScript
 			candidateCount = CollectDraftCandidates(playerIndex, candidates);
 		}
 
-		int optionCount = Math.Min(DraftOptionCount, candidateCount);
-		int optionStart = playerIndex * DraftOptionCount;
+		int optionCount = Math.Min(_draftOptionsPerDraw, candidateCount);
+		int optionStart = playerIndex * MaximumDraftOptions;
 		for (int index = 0; index < optionCount; index++)
 		{
+			if (_mirroredDraft)
+			{
+				_draftOptions[optionStart + index] = candidates[index];
+				continue;
+			}
+
 			int pick = _api.RandomInt(0, candidateCount - 1);
 			_draftOptions[optionStart + index] = candidates[pick];
 			candidates[pick] = candidates[candidateCount - 1];
@@ -1122,7 +1154,7 @@ public class MapScript : IWasmModule, ILobbyScript
 			SoldierProfile profile = SoldierProfiles[index];
 			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
-			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {profile.Capacity} capacity, {profile.MaximumCharges} charges every {profile.RechargeSeconds:0}s. Income {DescribeBuildingIncome(profile.BuildingTemplateId)}.";
+			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, {ScaledMaximumCharges(index)} charges every {profile.RechargeSeconds:0}s. Income {DescribeBuildingIncome(profile.BuildingTemplateId)}.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
 			AddDraftAbilityToCommandUnits(api, profile.BuildingTemplateId);
@@ -1162,7 +1194,6 @@ public class MapScript : IWasmModule, ILobbyScript
 		}
 
 		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, _draftOpen[playerIndex] != 0);
-		PublishDraftReadout(playerIndex);
 	}
 
 	private void SetDraftAbilityVisible(IGameAPI api, int playerIndex, string abilityId, bool visible)
@@ -1182,7 +1213,7 @@ public class MapScript : IWasmModule, ILobbyScript
 		int optionCount = _draftOptionCounts[playerIndex];
 		for (int index = 0; index < optionCount; index++)
 		{
-			if (_draftOptions[playerIndex * DraftOptionCount + index] == profileIndex) return true;
+			if (_draftOptions[playerIndex * MaximumDraftOptions + index] == profileIndex) return true;
 		}
 
 		return false;
@@ -1222,7 +1253,7 @@ public class MapScript : IWasmModule, ILobbyScript
 
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
 		// refuse does not cost the deck one of its nine buildings for the rest of the match.
-		_deckTakenBuildings |= 1 << profileIndex;
+		if (!_openPoolDrafting) _deckTakenBuildings |= 1 << profileIndex;
 
 		ApplyDraftAbilityState(_api, playerIndex);
 
