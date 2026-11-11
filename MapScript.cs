@@ -457,6 +457,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private void UpdateProduction(IGameAPI api, PlayerId player, float delta)
 	{
 		int playerIndex = player.Value;
+		if (_heroEntities[playerIndex] <= 0) return;
+
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 
 		for (int index = 0; index < SoldierProfiles.Length; index++)
@@ -891,11 +893,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId unit = owned[index];
-			if (unit.IsDead || unit.IsHero || unit.IsBuilding) continue;
+			if (unit.IsDead) continue;
 
-			unit.Destroy(false, false);
+			// Every production queue is cleared, including the ones its buildings were working on: an army is raised
+			// for the hero, so a queue that keeps running while the hero is dead would field soldiers nobody follows.
 			_producing[unit.UniqueId] = 0;
 			_productionTimers[unit.UniqueId] = 0f;
+			if (unit.IsHero || unit.IsBuilding) continue;
+
+			unit.Destroy(false, false);
 		}
 
 		PlayerId player = _api.GetPlayer(playerIndex);
@@ -1724,7 +1730,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			api.RegisterAbility(relicId, RelicNames[index], tooltip, string.Empty, true);
 			api.AddUnitTypeAbility(NexusTemplateId, relicId);
 			api.SetAbilityTooltip(relicId, tooltip);
-			api.SetAbilityGridPosition(relicId, index, 2);
+
+			// The command grid is four columns by three rows. Six relics therefore fill the first row and the first two
+			// slots of the second; putting them all on one row would silently drop the last two from the card.
+			api.SetAbilityGridPosition(relicId, index % 4, index / 4);
 			api.SetAbilityHotkey(relicId, RelicHotkeys[index]);
 			api.SetItemTooltip(relicId, tooltip);
 		}
