@@ -18,7 +18,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BuildingWoodCost = 100f;
 	private const int DefaultDraftOptionCount = 3;
 	private const int MaximumDraftOptions = 24;
-	private const int DraftRow = 1;
+	private const int DraftRow = 2;
 	private const int DraftAbandonSlot = 3;
 	private const int MaximumPopulation = 80;
 	private const float StartingGold = 200f;
