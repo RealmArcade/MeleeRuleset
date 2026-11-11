@@ -989,7 +989,7 @@
         "TemplateID": "ability/grounding_shout",
         "Name": "Grounding Shout",
         "AbilityType": "target_spell",
-        "Description": "60 magic damage in radius 4 and a 25% movement slow for 2 seconds.",
+        "Description": "60 magic damage in radius 4, rising to 120 with level, and a 25% movement slow for 2 seconds.",
         "ManaCost": 60,
         "Cooldown": 14,
         "TargetRange": 7,
@@ -1004,7 +1004,14 @@
             "Targets": "enemies",
             "Radius": 4,
             "Amount": 60,
-            "DamageType": "magic"
+            "DamageType": "magic",
+            "Scaling": {
+              "Attribute": "Intelligence",
+              "Shape": "linear",
+              "Coefficient": 5,
+              "Offset": 12,
+              "Cap": 120
+            }
           },
           {
             "Kind": "debuff",
@@ -1020,7 +1027,7 @@
         "TemplateID": "ability/hold_fast",
         "Name": "Hold Fast",
         "AbilityType": "target_spell",
-        "Description": "Allies in radius 6 gain +4 armor for 3 seconds.",
+        "Description": "Allies in radius 6 gain +4 armor for 3 seconds, rising to 4 seconds with level.",
         "ManaCost": 50,
         "Cooldown": 18,
         "TargetRange": 6,
@@ -1035,7 +1042,14 @@
             "Targets": "allies",
             "Radius": 6,
             "Duration": 3,
-            "BuffId": "buff/hold_fast"
+            "BuffId": "buff/hold_fast",
+            "Scaling": {
+              "Attribute": "Intelligence",
+              "Shape": "linear",
+              "Coefficient": 0.0833333,
+              "Offset": 12,
+              "Cap": 4
+            }
           }
         ]
       },
@@ -1043,7 +1057,7 @@
         "TemplateID": "ability/shield_bash",
         "Name": "Shield Bash",
         "AbilityType": "target_spell",
-        "Description": "40 physical damage and a 1.25 second stun to a single enemy in reach.",
+        "Description": "40 physical damage and a 1.25 second stun to a single enemy in reach, rising to 1.55 seconds with level.",
         "ManaCost": 60,
         "Cooldown": 16,
         "TargetRange": 4,
@@ -1062,7 +1076,14 @@
             "Kind": "stun",
             "Delivery": "single",
             "Targets": "enemies",
-            "Duration": 1.25
+            "Duration": 1.25,
+            "Scaling": {
+              "Attribute": "Intelligence",
+              "Shape": "linear",
+              "Coefficient": 0.025,
+              "Offset": 12,
+              "Cap": 1.55
+            }
           }
         ]
       },
@@ -1070,7 +1091,7 @@
         "TemplateID": "ability/ember_lance",
         "Name": "Ember Lance",
         "AbilityType": "target_spell",
-        "Description": "90 magic damage along a line of length 12 and 35 degrees, up to 5 targets.",
+        "Description": "90 magic damage along a line of length 12 and 35 degrees, up to 5 targets, rising to 170 with level.",
         "ManaCost": 80,
         "Cooldown": 10,
         "TargetRange": 12,
@@ -1086,7 +1107,14 @@
             "AngleDegrees": 35,
             "MaxTargets": 5,
             "Amount": 90,
-            "DamageType": "magic"
+            "DamageType": "magic",
+            "Scaling": {
+              "Attribute": "Intelligence",
+              "Shape": "linear",
+              "Coefficient": 6.6666667,
+              "Offset": 26,
+              "Cap": 170
+            }
           }
         ]
       },
@@ -1094,30 +1122,20 @@
         "TemplateID": "ability/cinderfield",
         "Name": "Cinderfield",
         "AbilityType": "target_spell",
-        "Description": "100 magic damage to every enemy in radius 5.",
+        "Description": "Ground area of radius 5 for 4 seconds, dealing 25 magic damage per second, rising to 5 seconds with level.",
         "ManaCost": 100,
         "Cooldown": 20,
         "TargetRange": 11,
         "AreaOfEffectRadius": 5,
         "GridX": 1,
         "GridY": 0,
-        "Hotkey": "W",
-        "Effects": [
-          {
-            "Kind": "damage",
-            "Delivery": "radius",
-            "Targets": "enemies",
-            "Radius": 5,
-            "Amount": 100,
-            "DamageType": "magic"
-          }
-        ]
+        "Hotkey": "W"
       },
       {
         "TemplateID": "ability/backdraft",
         "Name": "Backdraft",
         "AbilityType": "target_spell",
-        "Description": "70 magic damage and 3 units of knockback in radius 4.",
+        "Description": "70 magic damage and 3 units of knockback in radius 4, rising to 120 damage with level.",
         "ManaCost": 80,
         "Cooldown": 22,
         "TargetRange": 4,
@@ -1132,7 +1150,14 @@
             "Targets": "enemies",
             "Radius": 4,
             "Amount": 70,
-            "DamageType": "magic"
+            "DamageType": "magic",
+            "Scaling": {
+              "Attribute": "Intelligence",
+              "Shape": "linear",
+              "Coefficient": 4.1666667,
+              "Offset": 26,
+              "Cap": 120
+            }
           },
           {
             "Kind": "knockback",
@@ -1147,7 +1172,7 @@
         "TemplateID": "ability/requisition",
         "Name": "Requisition",
         "AbilityType": "instant_spell",
-        "Description": "Completes 30% of the hero's active construction's remaining time.",
+        "Description": "Completes 30% of the hero's active construction's remaining time, rising to 50% with level.",
         "ManaCost": 70,
         "Cooldown": 30,
         "TargetRange": 0,

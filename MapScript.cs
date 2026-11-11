@@ -30,7 +30,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float IncomeTickSeconds = 1f;
 	private const float IncomeTaxPerBuilding = 0.15f;
 	private const float CinderMarkDamagePerSecond = 6f;
-	private const float RequisitionCompletionFraction = 0.3f;
+	private const float CinderfieldRadius = 5f;
+	private const float CinderfieldDamagePerSecond = 25f;
+	private const float CinderfieldTickSeconds = 0.5f;
+	private const float CinderfieldBaseDurationSeconds = 4f;
+	private const float RequisitionBaseCompletionFraction = 0.3f;
+	private const float RequisitionMaximumCompletionFraction = 0.5f;
 	private const float BulwarkRecalculateSeconds = 1f;
 	private const float BulwarkSoldierRadius = 10f;
 	private const float BulwarkArmorPerSoldier = 0.6f;
@@ -216,6 +221,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _cinderMarkDamage = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _cinderfieldActive = new byte[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _cinderfieldCasters = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _cinderfieldOwners = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _cinderfieldCentersX = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _cinderfieldCentersZ = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _cinderfieldRemainingSeconds = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _cinderfieldDamageTimers = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _mendTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _wardingAegisTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _standardAuraTimers = new float[EcsSharedMemory.MAX_ENTITIES];
@@ -301,6 +313,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			AdvanceOwnConstruction(api, player, delta);
 		}
 
+		UpdateCinderfields(api, delta);
 		UpdateDamageAffinity(api, delta);
 
 		_bulwarkTimer += delta;
@@ -1037,6 +1050,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
+		if (abilityId == "ability/cinderfield")
+		{
+			BeginCinderfield(_api, caster, position);
+			return;
+		}
+
 		if (abilityId == "ability/emergency_levy")
 		{
 			GrantOneChargeToBuildings(playerIndex);
@@ -1045,6 +1064,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private void AdvanceActiveConstruction(int playerIndex)
 	{
+		UnitId hero = new(_heroEntities[playerIndex]);
+		int heroLevel = hero.IsDead ? 1 : hero.Level;
+
 		ReadOnlySpan<UnitId> owned = _api.GetUnitsOwnedByPlayer(playerIndex);
 		for (int index = 0; index < owned.Length; index++)
 		{
@@ -1055,11 +1077,103 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (progress >= 1f) continue;
 
 			float remainingSeconds = (1f - progress) * ResolveConstructionSeconds(building.TemplateID);
-			_api.AdvanceUnitConstruction(building, remainingSeconds * RequisitionCompletionFraction);
+			_api.AdvanceUnitConstruction(building, remainingSeconds * RequisitionCompletionFractionForLevel(heroLevel));
 
 			PlayerId player = _api.GetPlayer(playerIndex);
 			player.ShowFeedbackText("Requisition speeds the work along.", new Vector3(0.9f, 0.85f, 0.5f));
 			return;
+		}
+	}
+
+	private static float RequisitionCompletionFractionForLevel(int level)
+	{
+		int clampedLevel = Math.Clamp(level, 1, 6);
+		return MathF.Min(RequisitionMaximumCompletionFraction, RequisitionBaseCompletionFraction + ((clampedLevel - 1) * 0.05f));
+	}
+
+	private void BeginCinderfield(IGameAPI api, UnitId caster, Vector3 position)
+	{
+		int playerIndex = caster.Player;
+		if (playerIndex <= 0) return;
+
+		int slot = FindCinderfieldSlot();
+		_cinderfieldActive[slot] = 1;
+		_cinderfieldCasters[slot] = caster.UniqueId;
+		_cinderfieldOwners[slot] = playerIndex;
+		_cinderfieldCentersX[slot] = position.X;
+		_cinderfieldCentersZ[slot] = position.Z;
+		_cinderfieldRemainingSeconds[slot] = CinderfieldDurationForLevel(caster.Level);
+		_cinderfieldDamageTimers[slot] = 0f;
+
+		api.SpawnExpandingGroundRing(position, CinderfieldRadius, CinderfieldRadius, 1.1f, new Vector3(1f, 0.3f, 0.05f));
+		api.GetPlayer(playerIndex).ShowFeedbackText("Cinderfield burns the ground.", new Vector3(1f, 0.4f, 0.15f));
+	}
+
+	private static float CinderfieldDurationForLevel(int level)
+	{
+		int clampedLevel = Math.Clamp(level, 1, 6);
+		if (clampedLevel <= 3) return CinderfieldBaseDurationSeconds + ((clampedLevel - 1) * 0.25f);
+
+		return 4.5f + ((clampedLevel - 3) * (0.5f / 3f));
+	}
+
+	private int FindCinderfieldSlot()
+	{
+		int oldestSlot = 0;
+		float shortestRemaining = float.MaxValue;
+
+		for (int index = 0; index < _cinderfieldActive.Length; index++)
+		{
+			if (_cinderfieldActive[index] == 0) return index;
+			if (_cinderfieldRemainingSeconds[index] >= shortestRemaining) continue;
+
+			shortestRemaining = _cinderfieldRemainingSeconds[index];
+			oldestSlot = index;
+		}
+
+		return oldestSlot;
+	}
+
+	private void UpdateCinderfields(IGameAPI api, float delta)
+	{
+		if (delta <= 0f) return;
+
+		for (int index = 0; index < _cinderfieldActive.Length; index++)
+		{
+			if (_cinderfieldActive[index] == 0) continue;
+
+			_cinderfieldRemainingSeconds[index] -= delta;
+			_cinderfieldDamageTimers[index] += delta;
+
+			while (_cinderfieldDamageTimers[index] >= CinderfieldTickSeconds)
+			{
+				_cinderfieldDamageTimers[index] -= CinderfieldTickSeconds;
+				DamageCinderfield(api, index);
+			}
+
+			if (_cinderfieldRemainingSeconds[index] <= 0f) _cinderfieldActive[index] = 0;
+		}
+	}
+
+	private void DamageCinderfield(IGameAPI api, int slot)
+	{
+		int playerIndex = _cinderfieldOwners[slot];
+		var center = new Vector3(_cinderfieldCentersX[slot], 0f, _cinderfieldCentersZ[slot]);
+
+		UnitId caster = new(_cinderfieldCasters[slot]);
+		if (caster.IsDead) caster = new(_heroEntities[playerIndex]);
+		if (caster.IsDead) caster = UnitId.Invalid;
+
+		api.SpawnExpandingGroundRing(center, CinderfieldRadius, CinderfieldRadius, CinderfieldTickSeconds + 0.1f, new Vector3(1f, 0.3f, 0.05f));
+
+		ReadOnlySpan<UnitId> caught = api.GetUnitsInRadius(center, CinderfieldRadius);
+		for (int index = 0; index < caught.Length; index++)
+		{
+			UnitId unit = caught[index];
+			if (unit.IsDead) continue;
+			if (api.ArePlayersAllied(unit.Player, playerIndex)) continue;
+
+			api.DealTypedDamage(caster, unit, CinderfieldDamagePerSecond * CinderfieldTickSeconds, "magic");
 		}
 	}
 
