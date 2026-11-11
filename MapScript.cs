@@ -60,7 +60,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BulwarkArmorPerBuilding = 1.5f;
 	private const float BulwarkMagicResistancePerBuilding = 1.5f;
 	private const float HeroRepairHealthPercentPerSecond = 0.03f;
-	private const ulong DormantReadoutState = ulong.MaxValue;
+	private const string BulwarkBuffId = "buff/bulwark";
+	private const string WorkerCrewBuffIcon = "res://Assets/UI/golden_hammers.webp";
 
 	private const float RelicCost = 100f;
 	private const int RelicSlotCount = 6;
@@ -75,7 +76,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float EngageLeashDistance = 18f;
 	private const float StandardTargetMemorySeconds = 4f;
 	private const float TargetRetrySeconds = 0.6f;
-	private const int ReadoutRowCount = 8;
 	private const int FormationFrontSize = 3;
 	private const int FormationFlankSize = 2;
 
@@ -162,7 +162,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	};
 
 	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
-	private static readonly string[] InnateNames = { "Unbroken", "Cinder Mark", "Standing Ledger" };
 
 	private static readonly SoldierProfile[] SoldierProfiles =
 	{
@@ -208,10 +207,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private static readonly float[] ConstructionSecondsByProfile = { 30f, 30f, 30f, 30f, 30f, 30f, 35f, 35f, 35f };
 
-	// How close the hero has to stand for its presence to count as working the site. It is roughly a building's footprint,
-	// so the hero has to be at the site rather than anywhere on the board.
-	private const float ConstructionWorkRadius = 6f;
-
 	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * MaximumDraftOptions];
@@ -230,7 +225,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private bool _mirroredDraft;
 	private bool _openPoolDrafting;
 
-	private readonly byte[] _constructionStallNotified = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _heroEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _nexusEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _heroDeaths = new int[EcsSharedMemory.MAX_PLAYERS];
@@ -249,9 +243,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly float[] _nextFormationOrderTimes = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _soldierControlled = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _sourceBuildings = new int[EcsSharedMemory.MAX_ENTITIES];
-	private readonly ulong[] _readoutSignatures = new ulong[EcsSharedMemory.MAX_ENTITIES * ReadoutRowCount];
-	private readonly ulong[] _buildingReadoutStates = new ulong[EcsSharedMemory.MAX_ENTITIES];
-	private readonly ulong[] _heroReadoutStates = new ulong[EcsSharedMemory.MAX_PLAYERS];
+	private readonly ulong[] _bulwarkStates = new ulong[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _lastAlertTimes = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
@@ -372,7 +364,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UpdateHeroMemory(api, player);
 			UpdateArmyBehaviour(api, player);
 			ApplyAutoCasts(api, player, delta);
-			AdvanceOwnConstruction(api, player, delta);
 		}
 
 		MaintainWorkers(api, players, delta);
@@ -389,7 +380,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (player.Value == 0 || !player.IsActive) continue;
 
 			RefreshRelics(api, player);
-			PublishHeroReadout(api, player);
 			if (recalculateBulwark) RefreshBulwark(api, player);
 			ApplyCinderMarks(api, player, delta);
 		}
@@ -456,13 +446,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_heroEntities[playerIndex] = hero.UniqueId;
 		_heroLastPositionsX[playerIndex] = hero.Position.X;
 		_heroLastPositionsZ[playerIndex] = hero.Position.Z;
-		_heroReadoutStates[playerIndex] = ulong.MaxValue;
+		_bulwarkStates[playerIndex] = ulong.MaxValue;
 		api.SetUnitLevel(hero, 1);
 		api.SetUnitRepairRate(hero, HeroRepairHealthPercentPerSecond);
 		ApplyInnateToUnit(api, playerIndex, hero);
 		ApplyDraftAbilityState(api, playerIndex);
 		ResetUnitRuntimeState(hero.UniqueId);
-		PublishHeroReadout(api, player);
 		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(new Vector3(anchor.X, 0f, anchor.Y), 0f);
@@ -512,7 +501,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_heroEntities[playerIndex] = hero.UniqueId;
 		_heroLastPositionsX[playerIndex] = hero.Position.X;
 		_heroLastPositionsZ[playerIndex] = hero.Position.Z;
-		_heroReadoutStates[playerIndex] = ulong.MaxValue;
+		_bulwarkStates[playerIndex] = ulong.MaxValue;
 		int retainedLevel = Math.Max(1, _heroLevelsBeforeDeath[playerIndex]);
 		api.SetUnitLevel(hero, retainedLevel);
 		api.SetUnitExperience(hero, _heroExperiences[playerIndex]);
@@ -523,7 +512,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ApplyDraftAbilityState(api, playerIndex);
 		RefillChargesForPlayer(api, player);
 		ResetUnitRuntimeState(hero.UniqueId);
-		PublishHeroReadout(api, player);
 		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(hero.Position, 0.6f);
@@ -573,7 +561,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (building.IsDormant)
 			{
 				_producing[building.UniqueId] = 0;
-				PublishDormantBuildingReadout(api, building);
 				continue;
 			}
 
@@ -591,7 +578,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 			int charges = building.Charges;
 			PublishChargeBadge(api, player, building, charges);
-			PublishBuildingReadout(api, building, profileIndex, charges);
 
 			int reservedCapacity = _soldierCounts[profileIndex] + (_producing[entityId] != 0 ? 1 : 0);
 			if (_producing[entityId] == 0 && charges > 0 && reservedCapacity < _capacityCounts[profileIndex])
@@ -629,7 +615,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.EnableUnitAutoCombat(soldier, false);
 		api.SetUnitPlayerOrdersLocked(soldier, true);
 		_soldierControlled[soldier.UniqueId] = 1;
-		PublishSoldierReadout(api, soldier, FindProfileIndexBySoldier(profile.SoldierTemplateId));
 
 		int heroEntityId = _heroEntities[player.Value];
 		if (heroEntityId > 0)
@@ -678,9 +663,46 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			api.AddBuff(worker, profile.WorkerBuffIds[index], PermanentBuffSeconds);
 		}
 
-		if (HasRelic(player.Value, 3)) api.AddBuff(worker, DeepGranariesWorkerBuffId, PermanentBuffSeconds);
+		PublishWorkerBuffText(api, worker, profile);
+
+		if (HasRelic(player.Value, 3))
+		{
+			api.AddBuff(worker, DeepGranariesWorkerBuffId, PermanentBuffSeconds);
+			PublishDeepGranariesWorkerText(api, worker);
+		}
 
 		AssignWorkerToNearestNode(api, workerId, building, resource);
+	}
+
+	private static void PublishWorkerBuffText(IGameAPI api, UnitId worker, BuildingProfile profile)
+	{
+		string buildingName = api.GetUnitName(profile.TemplateId);
+		for (int index = 0; index < profile.WorkerBuffIds.Length; index++)
+		{
+			string core = BuffCore(profile.WorkerBuffIds[index]);
+			api.SetUnitTooltipText(worker, $"buff.{core}.name", $"{buildingName} Crew");
+			api.SetUnitTooltipText(worker, $"buff.{core}.description", profile.WorkerBuffSummary);
+			api.SetUnitTooltipText(worker, $"buff.{core}.icon", WorkerCrewBuffIcon);
+		}
+	}
+
+	private static void PublishDeepGranariesWorkerText(IGameAPI api, UnitId worker)
+	{
+		api.SetUnitTooltipText(worker, "buff.deep_granaries_worker.name", "Deep Granaries");
+		api.SetUnitTooltipText(worker, "buff.deep_granaries_worker.description", "+10% attack.");
+		api.SetUnitTooltipText(worker, "buff.deep_granaries_worker.icon", "res://Assets/UI/scroll_icon.webp");
+	}
+
+	private static void PublishCinderMarkText(IGameAPI api, UnitId unit)
+	{
+		api.SetUnitTooltipText(unit, "buff.cinder_mark.name", "Cinder Mark");
+		api.SetUnitTooltipText(unit, "buff.cinder_mark.description", "Burns for 6 magic damage a second for 2 seconds.");
+		api.SetUnitTooltipText(unit, "buff.cinder_mark.icon", "res://Assets/UI/fire_spell.webp");
+	}
+
+	private static string BuffCore(string buffId)
+	{
+		return buffId.StartsWith("buff/", StringComparison.OrdinalIgnoreCase) ? buffId.Substring("buff/".Length) : buffId;
 	}
 
 	private static byte ResourceByteOf(string resourceType)
@@ -1034,6 +1056,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		UnitId hero = new(heroEntityId);
 		if (hero.IsDead) return;
 
+		EnsureBulwarkBuff(api, hero);
+
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 		int nearbySoldiers = 0;
 		int functionalBuildings = 0;
@@ -1055,9 +1079,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		// The bulwark is restated every second and a modifier is appended rather than replaced, so the previous
 		// statement is withdrawn first. Without that the hero would keep last second's soldiers as well as this one's.
+		float heroArmor = nearbySoldiers * BulwarkArmorPerSoldier;
+		float heroResistance = nearbySoldiers * BulwarkMagicResistancePerSoldier;
 		api.RemoveStatModifiers(hero, "bulwark/hero");
-		api.AddStatModifier(hero, "Armor", false, nearbySoldiers * BulwarkArmorPerSoldier, "bulwark/hero");
-		api.AddStatModifier(hero, "MagicResistance", false, nearbySoldiers * BulwarkMagicResistancePerSoldier, "bulwark/hero");
+		api.AddStatModifier(hero, "Armor", false, heroArmor, "bulwark/hero");
+		api.AddStatModifier(hero, "MagicResistance", false, heroResistance, "bulwark/hero");
 
 		int nexusEntityId = _nexusEntities[playerIndex];
 		if (nexusEntityId <= 0) return;
@@ -1065,13 +1091,35 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		UnitId nexus = new(nexusEntityId);
 		if (nexus.IsDead) return;
 
-		api.RemoveStatModifiers(nexus, "bulwark/buildings");
-		api.AddStatModifier(nexus, "Armor", false, functionalBuildings * BulwarkArmorPerBuilding, "bulwark/buildings");
-		api.AddStatModifier(nexus, "MagicResistance", false, functionalBuildings * BulwarkMagicResistancePerBuilding, "bulwark/buildings");
+		EnsureBulwarkBuff(api, nexus);
 
-		string soldiers = nearbySoldiers == 1 ? "soldier" : "soldiers";
-		string buildings = functionalBuildings == 1 ? "building" : "buildings";
-		PublishReadout(api, hero, 2, "Bulwark", $"{nearbySoldiers} {soldiers}, {functionalBuildings} {buildings}");
+		float buildingArmor = functionalBuildings * BulwarkArmorPerBuilding;
+		float buildingResistance = functionalBuildings * BulwarkMagicResistancePerBuilding;
+		api.RemoveStatModifiers(nexus, "bulwark/buildings");
+		api.AddStatModifier(nexus, "Armor", false, buildingArmor, "bulwark/buildings");
+		api.AddStatModifier(nexus, "MagicResistance", false, buildingResistance, "bulwark/buildings");
+
+		ulong state = ((ulong)(uint)nearbySoldiers << 32) | (uint)functionalBuildings;
+		if (_bulwarkStates[playerIndex] == state) return;
+
+		_bulwarkStates[playerIndex] = state;
+		PublishBulwarkText(api, hero, "Nearby soldiers", nearbySoldiers, heroArmor, heroResistance);
+		PublishBulwarkText(api, nexus, "Buildings counted", functionalBuildings, buildingArmor, buildingResistance);
+	}
+
+	private static void EnsureBulwarkBuff(IGameAPI api, UnitId unit)
+	{
+		if (!unit.IsValid || unit.IsDead) return;
+		if (api.UnitHasBuff(unit, BulwarkBuffId)) return;
+
+		api.AddBuff(unit, BulwarkBuffId, PermanentBuffSeconds);
+	}
+
+	private static void PublishBulwarkText(IGameAPI api, UnitId unit, string countLabel, int count, float armor, float resistance)
+	{
+		api.SetUnitTooltipText(unit, "buff.bulwark.name", "Bulwark");
+		api.SetUnitTooltipText(unit, "buff.bulwark.description", $"{countLabel}: {count}. Armor +{armor:0.#}, magic resistance +{resistance:0.#}.");
+		api.SetUnitTooltipText(unit, "buff.bulwark.icon", "res://Assets/UI/battle_shield.webp");
 	}
 
 	private void HandleConstructionFinished(UnitId building)
@@ -1103,8 +1151,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
 		_api.SetUnitChargeCount(building, ScaledMaximumCharges(profileIndex) > 0 ? 1 : 0);
 		PublishChargeBadge(_api, player, building, building.Charges);
-		ClearReadoutRows(_api, building);
-		PublishBuildingReadout(_api, building, profileIndex, building.Charges);
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
 	}
 
@@ -1132,6 +1178,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (IsCinderMarkHero(attacker.Player) && !victim.IsBuilding && _burningFromMark[victim.UniqueId] == 0)
 		{
 			victim.AddBuff("buff/cinder_mark", 2f);
+			PublishCinderMarkText(_api, victim);
 		}
 
 		if (victim.IsBuilding && HasRelic(playerIndex, 2) && attacker.IsValid)
@@ -1177,7 +1224,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_heroExperiences[playerIndex] = hero.Experience;
 		_heroEntities[playerIndex] = 0;
 		_heroRecentTargets[playerIndex] = 0;
-		_heroReadoutStates[playerIndex] = ulong.MaxValue;
+		_bulwarkStates[playerIndex] = ulong.MaxValue;
 		_heroDeaths[playerIndex]++;
 		float revivalSeconds = MathF.Min(RevivalSecondsCap, BaseRevivalSeconds + Math.Max(0, _heroDeaths[playerIndex] - 1) * RevivalSecondsPerDeath);
 		_reviveAtTimes[playerIndex] = _api.GameElapsedTime + revivalSeconds;
@@ -1839,16 +1886,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		ApplyDraftAbilityState(_api, playerIndex);
 
-		// The hero is the one who raises the building, so it walks to the site it just paid for. Progress only advances
-		// while it stands there, which is what makes leaving the work stopped where it was.
-		int heroEntityId = _heroEntities[playerIndex];
-		if (heroEntityId > 0)
-		{
-			UnitId hero = new(heroEntityId);
-			if (!hero.IsDead) _api.IssueMoveOrder(hero, position);
-		}
-
-		player.ShowFeedbackText($"{_api.GetUnitName(buildingTemplateId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
+		// A site is raised by the hero working at it, never by the site existing near the hero. Nothing is ordered here, so
+		// the player right-clicks the site to send the hero to raise it, and walking away stops the work where it stood.
+		player.ShowFeedbackText(
+			$"{_api.GetUnitName(buildingTemplateId)} is under construction. Right-click the site to raise it.",
+			new Vector3(0.85f, 0.9f, 0.6f));
 		player.PlayClickSound();
 	}
 
@@ -1873,53 +1915,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		player.ShowFeedbackText("Construction cancelled. Its 100 wood is returned.", new Vector3(0.75f, 0.75f, 0.75f));
 	}
 
-	/// <summary>
-	///     Advances the sites this player's hero is standing at. The hero does the work, so a site only rises while it is
-	///     there: walking away freezes the progress where it stood and coming back resumes it. The engine still announces
-	///     each completion through OnConstructionFinished, where the charges start.
-	/// </summary>
-	private void AdvanceOwnConstruction(IGameAPI api, PlayerId player, float delta)
-	{
-		if (delta <= 0f) return;
-
-		int playerIndex = player.Value;
-		int heroEntityId = _heroEntities[playerIndex];
-		if (heroEntityId <= 0) return;
-
-		UnitId hero = new(heroEntityId);
-		if (hero.IsDead) return;
-		Vector3 heroPosition = hero.Position;
-
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId building = owned[index];
-			if (building.IsDead || !building.IsBuilding) continue;
-			if (api.GetUnitConstructionProgress(building) >= 1f)
-			{
-				_constructionStallNotified[building.Value] = 0;
-				continue;
-			}
-
-			Vector3 sitePosition = building.Position;
-			float offsetX = sitePosition.X - heroPosition.X;
-			float offsetZ = sitePosition.Z - heroPosition.Z;
-			if (offsetX * offsetX + offsetZ * offsetZ > ConstructionWorkRadius * ConstructionWorkRadius)
-			{
-				if (_constructionStallNotified[building.Value] == 0)
-				{
-					_constructionStallNotified[building.Value] = 1;
-					api.ShowFeedbackText("Your hero must stand at the site to raise it.", new Vector3(0.9f, 0.75f, 0.4f));
-				}
-
-				continue;
-			}
-
-			_constructionStallNotified[building.Value] = 0;
-			api.AdvanceUnitConstruction(building, delta);
-		}
-	}
-
 	private void ResetUnitRuntimeState(int entityId)
 	{
 		if (entityId <= 0 || entityId >= EcsSharedMemory.MAX_ENTITIES) return;
@@ -1930,14 +1925,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_nextFormationOrderTimes[entityId] = 0f;
 		_soldierControlled[entityId] = 0;
 		_sourceBuildings[entityId] = 0;
-		_buildingReadoutStates[entityId] = 0;
-		_constructionStallNotified[entityId] = 0;
-
-		int readoutStart = entityId * ReadoutRowCount;
-		for (int index = 0; index < ReadoutRowCount; index++)
-		{
-			_readoutSignatures[readoutStart + index] = 0;
-		}
 	}
 
 	/// <summary>
@@ -1993,8 +1980,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 			int profileIndex = FindProfileIndexBySoldier(soldier.TemplateID);
 			if (profileIndex < 0) continue;
-
-			PublishSoldierReadout(api, soldier, profileIndex);
 
 			if (_soldierControlled[soldier.UniqueId] == 0)
 			{
@@ -2273,7 +2258,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		RefreshRelics(_api, player);
-		PublishHeroReadout(_api, player);
 		ApplyRelicVendorState(_api, player);
 		player.ShowFeedbackText($"{RelicNames[relicIndex]} is yours.", new Vector3(0.85f, 0.95f, 0.75f));
 		player.PlayClickSound();
@@ -2310,73 +2294,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	private void PublishReadout(IGameAPI api, UnitId unit, int index, string name, string value)
+	private void PublishChargeBadge(IGameAPI api, PlayerId player, UnitId building, int charges)
 	{
-		if (!unit.IsValid || index < 0 || index >= ReadoutRowCount) return;
+		int entityId = building.UniqueId;
+		if (_lastBadgeValues[entityId] == charges + 1) return;
 
-		int slot = unit.UniqueId * ReadoutRowCount + index;
-		ulong signature = ((ulong)(uint)StringRegistry.GetOrAdd(name) << 32) | (uint)StringRegistry.GetOrAdd(value);
-		if (_readoutSignatures[slot] == signature) return;
-
-		_readoutSignatures[slot] = signature;
-		api.SetUnitTooltipText(unit, $"readout.{index}.name", name);
-		api.SetUnitTooltipText(unit, $"readout.{index}.value", value);
-	}
-
-	private void ClearReadoutRows(IGameAPI api, UnitId unit)
-	{
-		if (!unit.IsValid) return;
-
-		int start = unit.UniqueId * ReadoutRowCount;
-		for (int index = 0; index < ReadoutRowCount; index++)
-		{
-			_readoutSignatures[start + index] = 0;
-			api.SetUnitTooltipText(unit, $"readout.{index}.name", string.Empty);
-			api.SetUnitTooltipText(unit, $"readout.{index}.value", string.Empty);
-		}
-	}
-
-	private void PublishHeroReadout(IGameAPI api, PlayerId player)
-	{
-		int playerIndex = player.Value;
-		int heroEntityId = _heroEntities[playerIndex];
-		if (heroEntityId <= 0) return;
-
-		var hero = new UnitId(heroEntityId);
-		if (hero.IsDead) return;
-
-		int heldRelics = CountRelics(hero);
-		int optionCount = _draftOpen[playerIndex] != 0 ? _draftOptionCounts[playerIndex] : 0;
-
-		ulong state = (ulong)(uint)heldRelics;
-		state |= (ulong)(uint)optionCount << 8;
-		for (int index = 0; index < optionCount; index++)
-		{
-			state |= (ulong)(uint)_draftOptions[playerIndex * MaximumDraftOptions + index] << (16 + index * 6);
-		}
-
-		if (_heroReadoutStates[playerIndex] == state) return;
-		_heroReadoutStates[playerIndex] = state;
-
-		int templateIndex = _heroTemplateIndices[playerIndex];
-		string innate = templateIndex >= 0 && templateIndex < InnateNames.Length ? InnateNames[templateIndex] : string.Empty;
-		PublishReadout(api, hero, 0, "Innate", innate);
-		PublishReadout(api, hero, 1, "Relics", $"{heldRelics} / {RelicSlotCount}");
-
-		for (int index = 0; index < 3; index++)
-		{
-			if (index >= optionCount)
-			{
-				PublishReadout(api, hero, 3 + index, string.Empty, string.Empty);
-				continue;
-			}
-
-			int profileIndex = _draftOptions[playerIndex * MaximumDraftOptions + index];
-			PublishReadout(api, hero, 3 + index, "Offered", api.GetUnitName(SoldierProfiles[profileIndex].BuildingTemplateId));
-		}
-
-		PublishReadout(api, hero, 6, string.Empty, string.Empty);
-		PublishReadout(api, hero, 7, string.Empty, string.Empty);
+		_lastBadgeValues[entityId] = charges + 1;
+		api.SetUnitOverheadBadge(building, charges, player.Color);
 	}
 
 	private void RestoreRelicsToHero(IGameAPI api, int playerIndex, UnitId hero)
@@ -2387,117 +2311,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if ((flags & (1 << index)) == 0) continue;
 
 			api.AddItemToUnit(hero, RelicIds[index]);
-		}
-	}
-
-	private void PublishSoldierReadout(IGameAPI api, UnitId soldier, int profileIndex)
-	{
-		if (profileIndex < 0) return;
-
-		SoldierProfile profile = SoldierProfiles[profileIndex];
-		string formation = profile.Formation switch
-		{
-			SoldierFormation.Front => "Front",
-			SoldierFormation.Flank => "Flank",
-			_ => "Back"
-		};
-
-		string targeting = profile.TargetingRule switch
-		{
-			SoldierTargetingRule.TankShredder => "Tank-Shredder",
-			SoldierTargetingRule.Assassin => "Assassin",
-			_ => "Standard"
-		};
-
-		PublishReadout(api, soldier, 0, "Formation", formation);
-		PublishReadout(api, soldier, 1, "Targeting", targeting);
-		PublishReadout(api, soldier, 2, "Produced by", api.GetUnitName(profile.BuildingTemplateId));
-		PublishSourceChargeReadout(api, soldier);
-	}
-
-	private void PublishSourceChargeReadout(IGameAPI api, UnitId soldier)
-	{
-		int sourceEntityId = _sourceBuildings[soldier.UniqueId];
-		if (sourceEntityId <= 0) return;
-
-		var source = new UnitId(sourceEntityId);
-		if (source.IsDead)
-		{
-			PublishReadout(api, soldier, 3, "Charges", string.Empty);
-			return;
-		}
-
-		PublishReadout(api, soldier, 3, "Charges", $"{source.Charges} / {source.MaximumCharges}");
-	}
-
-	private void PublishBuildingReadout(IGameAPI api, UnitId building, int profileIndex, int charges)
-	{
-		int entityId = building.UniqueId;
-		int maintained = _soldierCounts[profileIndex];
-		int capacity = _capacityCounts[profileIndex];
-		bool producing = _producing[entityId] != 0;
-		int productionSeconds = producing ? (int)MathF.Ceiling(MathF.Max(0f, _productionTimers[entityId])) : 0;
-
-		ulong state = (ulong)(uint)profileIndex;
-		state |= (ulong)(uint)maintained << 8;
-		state |= (ulong)(uint)capacity << 16;
-		state |= (ulong)(uint)charges << 24;
-		state |= (ulong)(producing ? 1u : 0u) << 32;
-		state |= (ulong)(uint)productionSeconds << 33;
-		if (_buildingReadoutStates[entityId] == state) return;
-
-		_buildingReadoutStates[entityId] = state;
-
-		SoldierProfile profile = SoldierProfiles[profileIndex];
-		string production = producing
-			? $"Producing ({productionSeconds} s)"
-			: charges > 0 && maintained < capacity
-				? "Ready"
-				: maintained >= capacity
-					? "Capacity full"
-					: "Recharging";
-
-		PublishReadout(api, building, 0, "Unlocks", api.GetUnitName(profile.SoldierTemplateId));
-		PublishReadout(api, building, 1, "Capacity", $"{maintained} / {capacity}");
-		BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
-		PublishReadout(api, building, 2, "Workers", $"{workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s; {workerProfile.WorkerBuffSummary}");
-		PublishReadout(api, building, 3, "Production", production);
-		PublishReadout(api, building, 4, string.Empty, string.Empty);
-		PublishReadout(api, building, 5, string.Empty, string.Empty);
-		PublishReadout(api, building, 6, string.Empty, string.Empty);
-		PublishReadout(api, building, 7, string.Empty, string.Empty);
-	}
-
-	/// <summary>
-	///     States a destroyed building's condition where its production line normally reads. The charges and the queue it
-	///     was holding are still there, so the readout says what would bring them back rather than pretending the building
-	///     is merely recharging.
-	/// </summary>
-	private void PublishDormantBuildingReadout(IGameAPI api, UnitId building)
-	{
-		int entityId = building.UniqueId;
-		if (_buildingReadoutStates[entityId] == DormantReadoutState) return;
-
-		_buildingReadoutStates[entityId] = DormantReadoutState;
-		PublishReadout(api, building, 3, "Production", "Destroyed (repair to restore)");
-	}
-
-	private void PublishChargeBadge(IGameAPI api, PlayerId player, UnitId building, int charges)
-	{
-		int entityId = building.UniqueId;
-		if (_lastBadgeValues[entityId] == charges + 1) return;
-
-		_lastBadgeValues[entityId] = charges + 1;
-		api.SetUnitOverheadBadge(building, charges, player.Color);
-
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId soldier = owned[index];
-			if (soldier.IsDead || soldier.IsBuilding) continue;
-			if (_sourceBuildings[soldier.UniqueId] != entityId) continue;
-
-			PublishSourceChargeReadout(api, soldier);
 		}
 	}
 
@@ -2521,7 +2334,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (flags == previousFlags) return;
 
 		ApplyRelicVendorState(api, player);
-		PublishHeroReadout(api, player);
 
 		if ((flags & (1 << 0)) != 0 && (previousFlags & (1 << 0)) == 0)
 		{
@@ -2549,6 +2361,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (_workerBuildingOf[unit.UniqueId] <= 0) continue;
 
 			api.AddBuff(unit, DeepGranariesWorkerBuffId, PermanentBuffSeconds);
+			PublishDeepGranariesWorkerText(api, unit);
 		}
 	}
 
@@ -2589,6 +2402,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 				break;
 			case 1:
 				unit.AddBuff("buff/cinder_mark", 2f);
+				PublishCinderMarkText(api, unit);
 				break;
 		}
 	}

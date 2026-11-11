@@ -81,7 +81,8 @@
           "ability/grounding_shout",
           "ability/hold_fast",
           "ability/shield_bash",
-          "ability/begin_construction"
+          "ability/begin_construction",
+          "ability/innate_unbroken"
         ],
         "IsHero": true
       },
@@ -137,7 +138,8 @@
           "ability/ember_lance",
           "ability/cinderfield",
           "ability/backdraft",
-          "ability/begin_construction"
+          "ability/begin_construction",
+          "ability/innate_cinder_mark"
         ],
         "IsHero": true
       },
@@ -193,7 +195,8 @@
           "ability/requisition",
           "ability/forced_march",
           "ability/emergency_levy",
-          "ability/begin_construction"
+          "ability/begin_construction",
+          "ability/innate_standing_ledger"
         ],
         "IsHero": true
       },
@@ -1078,6 +1081,36 @@
     "Props": [],
     "Weapons": [],
     "Abilities": [
+      {
+        "TemplateID": "ability/innate_unbroken",
+        "Name": "Unbroken",
+        "AbilityType": "passive",
+        "Role": "Innate",
+        "Description": "Vale and every owned unit carry +6 armor and +10% tenacity while Vale lives. Always active; never cast or toggled.",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "GridX": 0,
+        "GridY": 1
+      },
+      {
+        "TemplateID": "ability/innate_cinder_mark",
+        "Name": "Cinder Mark",
+        "AbilityType": "passive",
+        "Role": "Innate",
+        "Description": "Sable's abilities and every owned unit's attacks burn their target for 6 magic damage a second for 2 seconds. Always active; never cast or toggled.",
+        "IconPath": "res://Assets/UI/fire_spell.webp",
+        "GridX": 0,
+        "GridY": 1
+      },
+      {
+        "TemplateID": "ability/innate_standing_ledger",
+        "Name": "Standing Ledger",
+        "AbilityType": "passive",
+        "Role": "Innate",
+        "Description": "Every owned soldier-granting building holds one more charge. Always active; never cast or toggled.",
+        "IconPath": "res://Assets/UI/scroll_icon.webp",
+        "GridX": 0,
+        "GridY": 1
+      },
       {
         "TemplateID": "ability/grounding_shout",
         "Name": "Grounding Shout",
