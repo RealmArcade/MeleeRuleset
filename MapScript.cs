@@ -620,6 +620,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.SetUnitInvulnerable(worker, true);
 		api.SetUnitPlayerOrdersLocked(worker, true);
 		api.EnableUnitAutoCombat(worker, false);
+		api.SetUnitWorker(worker, true);
 
 		AssignWorkerToNearestNode(api, workerId, building, resource);
 		api.SetUnitGatherTaxRate(worker, ResolveIncomeTaxRate(player, building.UniqueId));
