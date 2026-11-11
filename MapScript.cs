@@ -908,7 +908,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		ApplyRelicVendorState(_api, player);
-		player.ShowFeedbackText("Your hero has fallen. The army disperses.", new Vector3(1f, 0.35f, 0.3f));
+		player.ShowFeedbackText($"Your hero has fallen. The army disperses. Your hero returns in {revivalSeconds:0} seconds.", new Vector3(1f, 0.35f, 0.3f));
 		player.PlayWarningSound();
 	}
 
