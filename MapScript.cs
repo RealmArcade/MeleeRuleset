@@ -243,10 +243,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			api.RegisterResourceWorkerUnit(HeroTemplateIds[index]);
 		}
 
-		api.RegisterBuffModifier("buff/grounding_shout", "MovementSpeed", true, -25f);
+		api.RegisterBuffModifier("buff/grounding_shout", "MovementSpeed", true, -0.25f);
 		api.RegisterBuffModifier("buff/hold_fast", "Armor", false, 4f);
-		api.RegisterBuffModifier("buff/forced_march", "MovementSpeed", true, 20f);
-		api.RegisterBuffModifier("buff/standard_aura", "MovementSpeed", true, 10f);
+		api.RegisterBuffModifier("buff/forced_march", "MovementSpeed", true, 0.2f);
+		api.RegisterBuffModifier("buff/standard_aura", "MovementSpeed", true, 0.1f);
 		api.RegisterBuffModifier("buff/cinder_mark", "HpRegen", false, 0f);
 
 		for (int index = 0; index < _lastAlertTimes.Length; index++)
@@ -2059,7 +2059,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UnitId unit = owned[index];
 			if (unit.IsDead) continue;
 
-			api.AddStatModifier(unit, "Tenacity", true, 10f, "relic/wardens_writ");
+			api.AddStatModifier(unit, "Tenacity", false, 0.1f, "relic/wardens_writ");
 		}
 	}
 
@@ -2071,7 +2071,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		{
 			case 0:
 				api.AddStatModifier(unit, "Armor", false, 6f, "innate/unbroken");
-				api.AddStatModifier(unit, "Tenacity", true, 10f, "innate/unbroken");
+				api.AddStatModifier(unit, "Tenacity", true, 0.1f, "innate/unbroken");
 				break;
 			case 1:
 				unit.AddBuff("buff/cinder_mark", 2f);
@@ -2091,7 +2091,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		if ((flags & (1 << 4)) != 0)
 		{
-			api.AddStatModifier(unit, "Tenacity", true, 10f, "relic/wardens_writ");
+			api.AddStatModifier(unit, "Tenacity", false, 0.1f, "relic/wardens_writ");
 		}
 	}
 
