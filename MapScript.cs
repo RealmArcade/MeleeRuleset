@@ -53,6 +53,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BulwarkMagicResistancePerSoldier = 0.6f;
 	private const float BulwarkArmorPerBuilding = 1.5f;
 	private const float BulwarkMagicResistancePerBuilding = 1.5f;
+	private const float HeroRepairHealthPercentPerSecond = 0.03f;
+	private const ulong DormantReadoutState = ulong.MaxValue;
 
 	private const float RelicCost = 100f;
 	private const int RelicSlotCount = 6;
@@ -250,6 +252,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private IGameAPI _api = null!;
 	private readonly int[] _workerBuildingOf = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _workerNodeOf = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _workerPausedOf = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _workerResourceOf = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _workerSwingOf = new float[EcsSharedMemory.MAX_ENTITIES];
 	private float _workerCheckTimer;
@@ -413,6 +416,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_heroLastPositionsZ[playerIndex] = hero.Position.Z;
 		_heroReadoutStates[playerIndex] = ulong.MaxValue;
 		api.SetUnitLevel(hero, 1);
+		api.SetUnitRepairRate(hero, HeroRepairHealthPercentPerSecond);
 		ApplyInnateToUnit(api, playerIndex, hero);
 		ApplyDraftAbilityState(api, playerIndex);
 		ResetUnitRuntimeState(hero.UniqueId);
@@ -466,6 +470,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int retainedLevel = Math.Max(1, _heroLevelsBeforeDeath[playerIndex]);
 		api.SetUnitLevel(hero, retainedLevel);
 		api.SetUnitExperience(hero, _heroExperiences[playerIndex]);
+		api.SetUnitRepairRate(hero, HeroRepairHealthPercentPerSecond);
 		ApplyInnateToUnit(api, playerIndex, hero);
 		RestoreRelicsToHero(api, playerIndex, hero);
 		ApplyRelicsToUnit(api, playerIndex, hero);
@@ -515,10 +520,18 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		{
 			UnitId building = owned[index];
 			if (building.IsDead || !building.IsBuilding) continue;
-			if (!IsBuildingOperational(api, building)) continue;
 
 			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
 			if (profileIndex < 0) continue;
+
+			if (building.IsDormant)
+			{
+				_producing[building.UniqueId] = 0;
+				PublishDormantBuildingReadout(api, building);
+				continue;
+			}
+
+			if (!IsBuildingOperational(api, building)) continue;
 
 			SoldierProfile profile = SoldierProfiles[profileIndex];
 			int entityId = building.UniqueId;
@@ -695,6 +708,26 @@ public partial class MapScript : IWasmModule, ILobbyScript
 					_workerNodeOf[workerId] = 0;
 					_workerResourceOf[workerId] = 0;
 					api.DestroyUnit(unit, executeDespawnShader: false, playDeathAnimation: false);
+					continue;
+				}
+
+				// A destroyed building pays nothing while it waits to be mended, so its worker stands down rather than
+				// mining a node the building cannot be paid from. It walks back to work the moment the building stands.
+				if (building.IsDormant)
+				{
+					if (_workerPausedOf[workerId] == 0)
+					{
+						_workerPausedOf[workerId] = 1;
+						api.IssueStopOrder(unit);
+					}
+
+					continue;
+				}
+
+				if (_workerPausedOf[workerId] != 0)
+				{
+					_workerPausedOf[workerId] = 0;
+					AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
 					continue;
 				}
 
@@ -1681,6 +1714,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
+		_api.SetUnitRepairable(site, true);
 		RetireDraftSite(playerIndex);
 
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
@@ -2317,6 +2351,20 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		PublishReadout(api, building, 7, string.Empty, string.Empty);
 	}
 
+	/// <summary>
+	///     States a destroyed building's condition where its production line normally reads. The charges and the queue it
+	///     was holding are still there, so the readout says what would bring them back rather than pretending the building
+	///     is merely recharging.
+	/// </summary>
+	private void PublishDormantBuildingReadout(IGameAPI api, UnitId building)
+	{
+		int entityId = building.UniqueId;
+		if (_buildingReadoutStates[entityId] == DormantReadoutState) return;
+
+		_buildingReadoutStates[entityId] = DormantReadoutState;
+		PublishReadout(api, building, 3, "Production", "Destroyed (repair to restore)");
+	}
+
 	private void PublishChargeBadge(IGameAPI api, PlayerId player, UnitId building, int charges)
 	{
 		int entityId = building.UniqueId;
@@ -2444,7 +2492,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private static bool IsBuildingOperational(IGameAPI api, UnitId building)
 	{
-		if (building.Health <= 0f) return false;
+		if (building.IsDormant || building.Health <= 0f) return false;
 
 		return api.GetUnitConstructionProgress(building) >= 1f;
 	}
