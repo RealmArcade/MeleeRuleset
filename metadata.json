@@ -61,6 +61,7 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
+        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 3.2,
           "AgilityPerLevel": 2.4,
@@ -116,6 +117,7 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
+        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 3.2,
           "AgilityPerLevel": 2.4,
@@ -171,6 +173,7 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
+        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 3.2,
           "AgilityPerLevel": 2.4,

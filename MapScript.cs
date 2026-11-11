@@ -24,8 +24,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
 	private const float UnderAttackAlertCooldownSeconds = 8f;
-	private const float BaseRevivalSeconds = 6f;
+	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
+	private const float RevivalSecondsCap = 45f;
 	private const float IncomeTickSeconds = 1f;
 	private const float IncomeTaxPerBuilding = 0.15f;
 	private const float CinderMarkDamagePerSecond = 6f;
@@ -36,6 +37,23 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BulwarkMagicResistancePerSoldier = 0.6f;
 	private const float BulwarkArmorPerBuilding = 1.5f;
 	private const float BulwarkMagicResistancePerBuilding = 1.5f;
+
+	private const float RelicCost = 100f;
+	private const int RelicSlotCount = 6;
+	private const float FormationFrontDistance = 3.4f;
+	private const float FormationFlankDistance = 3.0f;
+	private const float FormationBackDistance = 3.4f;
+	private const float FormationRowSpacing = 1.7f;
+	private const float FormationColumnSpacing = 2.1f;
+	private const float FormationSlotTolerance = 1.5f;
+	private const float FormationLeashDistance = 24f;
+	private const float FormationOrderIntervalSeconds = 0.45f;
+	private const float EngageLeashDistance = 18f;
+	private const float StandardTargetMemorySeconds = 4f;
+	private const float TargetRetrySeconds = 0.6f;
+	private const int ReadoutRowCount = 8;
+	private const int FormationFrontSize = 3;
+	private const int FormationFlankSize = 2;
 
 	private const string MendAbilityId = "ability/mend";
 	private const string WardingAegisAbilityId = "ability/warding_aegis";
@@ -52,6 +70,20 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float StandardAuraRadius = 7f;
 	private const float StandardAuraCooldownSeconds = 5f;
 
+	private enum SoldierFormation
+	{
+		Front,
+		Flank,
+		Back
+	}
+
+	private enum SoldierTargetingRule
+	{
+		Standard,
+		TankShredder,
+		Assassin
+	}
+
 	private readonly record struct SoldierProfile(
 		string SoldierTemplateId,
 		string BuildingTemplateId,
@@ -59,7 +91,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int MaximumCharges,
 		float RechargeSeconds,
 		float ProductionSeconds,
-		bool FrontFormation);
+		float AcquisitionRange,
+		SoldierFormation Formation,
+		SoldierTargetingRule TargetingRule);
 
 	private readonly record struct BuildingProfile(
 		string TemplateId,
@@ -78,17 +112,40 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"item/muster_bell"
 	};
 
+	private static readonly string[] RelicNames =
+	{
+		"Sigil of the Wall",
+		"Courier's Knot",
+		"Spiked Barricades",
+		"Deep Granaries",
+		"Warden's Writ",
+		"Muster Bell"
+	};
+
+	private static readonly string[] RelicEffects =
+	{
+		"Front-formation soldiers gain 10% maximum health.",
+		"Soldier-building recharge is 10% faster.",
+		"Owned buildings return 25% of the damage they take.",
+		"Passive building income is 10% higher.",
+		"All owned units gain 10 Tenacity.",
+		"Soldier-building recharge is 10% faster."
+	};
+
+	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
+	private static readonly string[] InnateNames = { "Unbroken", "Cinder Mark", "Standing Ledger" };
+
 	private static readonly SoldierProfile[] SoldierProfiles =
 	{
-		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 5f, true),
-		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 4f, false),
-		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 5f, true),
-		new("unit/bowman", "building/archery_range", 8, 4, 18f, 4f, false),
-		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 3f, false),
-		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 8f, false),
-		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 5f, false),
-		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 5f, false),
-		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 6f, true)
+		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 5f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard),
+		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 4f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 5f, 12f, SoldierFormation.Front, SoldierTargetingRule.TankShredder),
+		new("unit/bowman", "building/archery_range", 8, 4, 18f, 4f, 12f, SoldierFormation.Back, SoldierTargetingRule.Assassin),
+		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 3f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 8f, 14f, SoldierFormation.Back, SoldierTargetingRule.TankShredder),
+		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 5f, 12f, SoldierFormation.Back, SoldierTargetingRule.Standard),
+		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 5f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 6f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard)
 	};
 
 	private static readonly BuildingProfile[] BuildingProfiles =
@@ -139,6 +196,22 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly int[] _heroDeaths = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _heroTemplateIndices = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _reviveAtTimes = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _heroExperiences = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _heroLevelsBeforeDeath = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _heroFacing = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _heroLastPositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _heroLastPositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _heroRecentTargets = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly float[] _heroRecentTargetTimes = new float[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _assignedTargets = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _nextTargetTimes = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _nextAttackRefreshTimes = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _nextFormationOrderTimes = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _soldierControlled = new byte[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _sourceBuildings = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly ulong[] _readoutSignatures = new ulong[EcsSharedMemory.MAX_ENTITIES * ReadoutRowCount];
+	private readonly ulong[] _buildingReadoutStates = new ulong[EcsSharedMemory.MAX_ENTITIES];
+	private readonly ulong[] _heroReadoutStates = new ulong[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _lastAlertTimes = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
@@ -187,6 +260,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.OnConstructionFinished += HandleConstructionFinished;
 
 		RegisterDraftAbilities(api);
+		RegisterRelicVendor(api);
 		InitializeDamageAffinity(api);
 		WarnWhenTheBoardIsNotAuthoredForMelee(api);
 
@@ -221,6 +295,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UpdateArmyLevel(api, player);
 			UpdateRevival(api, player);
 			UpdateProduction(api, player, delta);
+			UpdateHeroMemory(api, player);
+			UpdateArmyBehaviour(api, player);
 			ApplyAutoCasts(api, player, delta);
 			AdvanceOwnConstruction(api, player, delta);
 		}
@@ -242,6 +318,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (player.Value == 0 || !player.IsActive) continue;
 
 			RefreshRelics(api, player);
+			PublishHeroReadout(api, player);
 			if (recalculateBulwark) RefreshBulwark(api, player);
 			if (applyIncome) ApplyIncome(api, player, incomeDelta);
 			ApplyCinderMarks(api, player, delta);
@@ -307,9 +384,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (!hero.IsValid) return;
 
 		_heroEntities[playerIndex] = hero.UniqueId;
+		_heroLastPositionsX[playerIndex] = hero.Position.X;
+		_heroLastPositionsZ[playerIndex] = hero.Position.Z;
+		_heroReadoutStates[playerIndex] = ulong.MaxValue;
 		api.SetUnitLevel(hero, 1);
 		ApplyInnateToUnit(api, playerIndex, hero);
 		ApplyDraftAbilityState(api, playerIndex);
+		ResetUnitRuntimeState(hero.UniqueId);
+		PublishHeroReadout(api, player);
+		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(new Vector3(anchor.X, 0f, anchor.Y), 0f);
 		player.ShowFeedbackText($"{HeroFactionNames[heroTemplateIndex]} answers the call.", new Vector3(0.85f, 0.95f, 1f));
@@ -352,11 +435,20 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (!hero.IsValid) return;
 
 		_heroEntities[playerIndex] = hero.UniqueId;
-		api.SetUnitLevel(hero, 1);
+		_heroLastPositionsX[playerIndex] = hero.Position.X;
+		_heroLastPositionsZ[playerIndex] = hero.Position.Z;
+		_heroReadoutStates[playerIndex] = ulong.MaxValue;
+		int retainedLevel = Math.Max(1, _heroLevelsBeforeDeath[playerIndex]);
+		api.SetUnitLevel(hero, retainedLevel);
+		api.SetUnitExperience(hero, _heroExperiences[playerIndex]);
 		ApplyInnateToUnit(api, playerIndex, hero);
+		RestoreRelicsToHero(api, playerIndex, hero);
 		ApplyRelicsToUnit(api, playerIndex, hero);
 		ApplyDraftAbilityState(api, playerIndex);
 		RefillChargesForPlayer(api, player);
+		ResetUnitRuntimeState(hero.UniqueId);
+		PublishHeroReadout(api, player);
+		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(hero.Position, 0.6f);
 		player.ShowFeedbackText("Your hero returns to the field.", new Vector3(0.6f, 1f, 0.7f));
@@ -413,6 +505,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 			int charges = building.Charges;
 			PublishChargeBadge(api, player, building, charges);
+			PublishBuildingReadout(api, building, profileIndex, charges);
 
 			int reservedCapacity = _soldierCounts[profileIndex] + (_producing[entityId] != 0 ? 1 : 0);
 			if (_producing[entityId] == 0 && charges > 0 && reservedCapacity < _capacityCounts[profileIndex])
@@ -444,6 +537,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		UnitId soldier = player.SpawnUnit(profile.SoldierTemplateId, position, true, true);
 		if (!soldier.IsValid) return;
+
+		ResetUnitRuntimeState(soldier.UniqueId);
+		_sourceBuildings[soldier.UniqueId] = building.UniqueId;
+		api.EnableUnitAutoCombat(soldier, false);
+		_soldierControlled[soldier.UniqueId] = 1;
+		PublishSoldierReadout(api, soldier, FindProfileIndexBySoldier(profile.SoldierTemplateId));
 
 		int heroEntityId = _heroEntities[player.Value];
 		if (heroEntityId > 0)
@@ -686,6 +785,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.RemoveStatModifiers(nexus, "bulwark/buildings");
 		api.AddStatModifier(nexus, "Armor", false, functionalBuildings * BulwarkArmorPerBuilding, "bulwark/buildings");
 		api.AddStatModifier(nexus, "MagicResistance", false, functionalBuildings * BulwarkMagicResistancePerBuilding, "bulwark/buildings");
+
+		PublishReadout(api, hero, 2, "Bulwark", $"{nearbySoldiers} soldiers, {functionalBuildings} buildings");
 	}
 
 	private void HandleConstructionFinished(UnitId building)
@@ -706,6 +807,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
 		_api.SetUnitChargeCount(building, ScaledMaximumCharges(profileIndex) > 0 ? 1 : 0);
 		PublishChargeBadge(_api, player, building, building.Charges);
+		ClearReadoutRows(_api, building);
+		PublishBuildingReadout(_api, building, profileIndex, building.Charges);
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
 	}
 
@@ -715,6 +818,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		int playerIndex = victim.Player;
 		if (playerIndex <= 0) return;
+
+		if (attacker.IsValid && attacker.IsHero && attacker.Player > 0 && !attacker.IsDead)
+		{
+			int attackingPlayerIndex = attacker.Player;
+			if (!_api.ArePlayersAllied(attackingPlayerIndex, playerIndex))
+			{
+				_heroRecentTargets[attackingPlayerIndex] = victim.UniqueId;
+				_heroRecentTargetTimes[attackingPlayerIndex] = _api.GameElapsedTime;
+			}
+		}
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		if (!player.IsActive) return;
@@ -764,9 +877,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int playerIndex = hero.Player;
 		if (playerIndex <= 0) return;
 
+		_heroLevelsBeforeDeath[playerIndex] = Math.Max(1, hero.Level);
+		_heroExperiences[playerIndex] = hero.Experience;
+		_heroEntities[playerIndex] = 0;
+		_heroRecentTargets[playerIndex] = 0;
+		_heroReadoutStates[playerIndex] = ulong.MaxValue;
 		_heroDeaths[playerIndex]++;
-		float revivalSeconds = BaseRevivalSeconds + Math.Max(0, _heroDeaths[playerIndex] - 1) * RevivalSecondsPerDeath;
+		float revivalSeconds = MathF.Min(RevivalSecondsCap, BaseRevivalSeconds + Math.Max(0, _heroDeaths[playerIndex] - 1) * RevivalSecondsPerDeath);
 		_reviveAtTimes[playerIndex] = _api.GameElapsedTime + revivalSeconds;
+		AbandonOpenDraft(playerIndex);
 
 		ReadOnlySpan<UnitId> owned = _api.GetUnitsOwnedByPlayer(playerIndex);
 		for (int index = 0; index < owned.Length; index++)
@@ -780,6 +899,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		PlayerId player = _api.GetPlayer(playerIndex);
+		ApplyRelicVendorState(_api, player);
 		player.ShowFeedbackText("Your hero has fallen. The army disperses.", new Vector3(1f, 0.35f, 0.3f));
 		player.PlayWarningSound();
 	}
@@ -878,6 +998,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		int playerIndex = caster.Player;
 		if (playerIndex <= 0) return;
+
+		if (IsRelicAbility(abilityId))
+		{
+			BuyRelic(playerIndex, abilityId);
+			return;
+		}
 
 		if (abilityId == ConstructionAbilityId)
 		{
@@ -1300,6 +1426,548 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
+	private void ResetUnitRuntimeState(int entityId)
+	{
+		if (entityId <= 0 || entityId >= EcsSharedMemory.MAX_ENTITIES) return;
+
+		_assignedTargets[entityId] = 0;
+		_nextTargetTimes[entityId] = 0f;
+		_nextAttackRefreshTimes[entityId] = 0f;
+		_nextFormationOrderTimes[entityId] = 0f;
+		_soldierControlled[entityId] = 0;
+		_sourceBuildings[entityId] = 0;
+		_buildingReadoutStates[entityId] = 0;
+
+		int readoutStart = entityId * ReadoutRowCount;
+		for (int index = 0; index < ReadoutRowCount; index++)
+		{
+			_readoutSignatures[readoutStart + index] = 0;
+		}
+	}
+
+	/// <summary>
+	///     Keeps the hero's facing, experience and level while it stands, so a revival returns the progression the hero
+	///     earned rather than resetting it. Facing is the direction the hero last walked, which is what the formation
+	///     slots are built around.
+	/// </summary>
+	private void UpdateHeroMemory(IGameAPI api, PlayerId player)
+	{
+		int playerIndex = player.Value;
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		UnitId hero = new(heroEntityId);
+		if (hero.IsDead) return;
+
+		_heroLevelsBeforeDeath[playerIndex] = Math.Max(1, hero.Level);
+		_heroExperiences[playerIndex] = hero.Experience;
+
+		Vector3 position = hero.Position;
+		float deltaX = position.X - _heroLastPositionsX[playerIndex];
+		float deltaZ = position.Z - _heroLastPositionsZ[playerIndex];
+		if (deltaX * deltaX + deltaZ * deltaZ > 0.0025f) _heroFacing[playerIndex] = MathF.Atan2(deltaX, deltaZ);
+
+		_heroLastPositionsX[playerIndex] = position.X;
+		_heroLastPositionsZ[playerIndex] = position.Z;
+	}
+
+	/// <summary>
+	///     Keeps the autonomous army in the slots its authored formation states and points each soldier at the target its
+	///     authored targeting rule selects. The engine still performs the pathing, collision and attack resolution; this
+	///     only decides where a soldier belongs and what it should fight, which is the behaviour the design places in the
+	///     ruleset rather than in a player order.
+	/// </summary>
+	private void UpdateArmyBehaviour(IGameAPI api, PlayerId player)
+	{
+		int playerIndex = player.Value;
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		UnitId hero = new(heroEntityId);
+		if (hero.IsDead) return;
+
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		int frontCount = 0;
+		int flankCount = 0;
+		int backCount = 0;
+
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId soldier = owned[index];
+			if (soldier.IsDead || soldier.IsHero || soldier.IsBuilding) continue;
+
+			int profileIndex = FindProfileIndexBySoldier(soldier.TemplateID);
+			if (profileIndex < 0) continue;
+
+			PublishSoldierReadout(api, soldier, profileIndex);
+
+			if (_soldierControlled[soldier.UniqueId] == 0)
+			{
+				api.EnableUnitAutoCombat(soldier, false);
+				_soldierControlled[soldier.UniqueId] = 1;
+			}
+
+			SoldierProfile profile = SoldierProfiles[profileIndex];
+			int slotIndex;
+			switch (profile.Formation)
+			{
+				case SoldierFormation.Front:
+					slotIndex = frontCount++;
+					break;
+				case SoldierFormation.Flank:
+					slotIndex = flankCount++;
+					break;
+				default:
+					slotIndex = backCount++;
+					break;
+			}
+
+			Vector3 slot = ComputeFormationSlot(profile.Formation, slotIndex, hero.Position, _heroFacing[playerIndex]);
+			UpdateSoldierBehaviour(api, player, hero, soldier, profile, slot);
+		}
+	}
+
+	private static Vector3 ComputeFormationSlot(SoldierFormation formation, int slotIndex, Vector3 heroPosition, float facing)
+	{
+		float forwardX = MathF.Sin(facing);
+		float forwardZ = MathF.Cos(facing);
+		float rightX = MathF.Cos(facing);
+		float rightZ = -MathF.Sin(facing);
+
+		switch (formation)
+		{
+			case SoldierFormation.Front:
+			{
+				int row = slotIndex / FormationFrontSize;
+				int column = slotIndex % FormationFrontSize - 1;
+				float forward = FormationFrontDistance + row * FormationRowSpacing;
+				float lateral = column * FormationColumnSpacing;
+				return new Vector3(
+					heroPosition.X + forwardX * forward + rightX * lateral,
+					heroPosition.Y,
+					heroPosition.Z + forwardZ * forward + rightZ * lateral);
+			}
+			case SoldierFormation.Flank:
+			{
+				int row = slotIndex / FormationFlankSize;
+				int side = slotIndex % FormationFlankSize == 0 ? -1 : 1;
+				float lateral = side * (FormationFlankDistance + row * FormationRowSpacing);
+				float forward = row % 2 == 0 ? 0.8f : -0.8f;
+				return new Vector3(
+					heroPosition.X + rightX * lateral + forwardX * forward,
+					heroPosition.Y,
+					heroPosition.Z + rightZ * lateral + forwardZ * forward);
+			}
+			default:
+			{
+				int row = slotIndex / FormationFrontSize;
+				int column = slotIndex % FormationFrontSize - 1;
+				float behind = FormationBackDistance + row * FormationRowSpacing;
+				float lateral = column * FormationColumnSpacing;
+				return new Vector3(
+					heroPosition.X - forwardX * behind + rightX * lateral,
+					heroPosition.Y,
+					heroPosition.Z - forwardZ * behind + rightZ * lateral);
+			}
+		}
+	}
+
+	private void UpdateSoldierBehaviour(IGameAPI api, PlayerId player, UnitId hero, UnitId soldier, in SoldierProfile profile, Vector3 slot)
+	{
+		int entityId = soldier.UniqueId;
+		float now = api.GameElapsedTime;
+
+		int targetEntityId = _assignedTargets[entityId];
+		bool targetUsable = targetEntityId > 0 && IsTargetStillReachable(api, player.Value, targetEntityId, hero.Position);
+		if (!targetUsable && targetEntityId != 0)
+		{
+			_assignedTargets[entityId] = 0;
+			targetEntityId = 0;
+		}
+
+		if (targetEntityId == 0 && now >= _nextTargetTimes[entityId])
+		{
+			UnitId selected = SelectTarget(api, soldier, profile, player);
+			if (selected.IsValid)
+			{
+				api.IssueAttackOrder(soldier, selected);
+				_assignedTargets[entityId] = selected.UniqueId;
+				_nextTargetTimes[entityId] = now + TargetRetrySeconds;
+				_nextAttackRefreshTimes[entityId] = now + 1f;
+				targetEntityId = selected.UniqueId;
+				targetUsable = true;
+			}
+		}
+
+		if (targetEntityId != 0 && targetUsable)
+		{
+			if (now >= _nextAttackRefreshTimes[entityId])
+			{
+				api.IssueAttackOrder(soldier, new UnitId(targetEntityId));
+				_nextAttackRefreshTimes[entityId] = now + 1f;
+			}
+
+			return;
+		}
+
+		if (now < _nextFormationOrderTimes[entityId]) return;
+
+		float heroDistanceSquared = Vector3.DistanceSquared(soldier.Position, hero.Position);
+		float slotDistanceSquared = Vector3.DistanceSquared(soldier.Position, slot);
+		if (slotDistanceSquared <= FormationSlotTolerance * FormationSlotTolerance && heroDistanceSquared <= FormationLeashDistance * FormationLeashDistance) return;
+
+		api.IssueMoveOrder(soldier, slot);
+		_nextFormationOrderTimes[entityId] = now + FormationOrderIntervalSeconds;
+	}
+
+	private bool IsTargetStillReachable(IGameAPI api, int playerIndex, int targetEntityId, Vector3 heroPosition)
+	{
+		var target = new UnitId(targetEntityId);
+		if (!target.IsValid || target.IsDead) return false;
+		if (api.ArePlayersAllied(target.Player, playerIndex)) return false;
+		if (target.Invulnerable) return false;
+
+		return Vector3.DistanceSquared(target.Position, heroPosition) <= EngageLeashDistance * EngageLeashDistance;
+	}
+
+	private UnitId SelectTarget(IGameAPI api, UnitId soldier, in SoldierProfile profile, PlayerId player)
+	{
+		float acquisitionRange = profile.AcquisitionRange;
+		float acquisitionRangeSquared = acquisitionRange * acquisitionRange;
+		float now = api.GameElapsedTime;
+
+		if (profile.TargetingRule == SoldierTargetingRule.Standard
+		    && now - _heroRecentTargetTimes[player.Value] <= StandardTargetMemorySeconds)
+		{
+			var remembered = new UnitId(_heroRecentTargets[player.Value]);
+			if (IsTargetCandidate(api, remembered, player.Value, soldier.Position, acquisitionRangeSquared)) return remembered;
+		}
+
+		UnitId best = UnitId.Invalid;
+		float bestScore = profile.TargetingRule == SoldierTargetingRule.Standard ? float.MaxValue : 0f;
+		ReadOnlySpan<UnitId> candidates = api.GetUnitsInRange(soldier.Position, acquisitionRange);
+
+		for (int index = 0; index < candidates.Length; index++)
+		{
+			UnitId candidate = candidates[index];
+			if (!IsTargetCandidate(api, candidate, player.Value, soldier.Position, acquisitionRangeSquared)) continue;
+
+			switch (profile.TargetingRule)
+			{
+				case SoldierTargetingRule.TankShredder:
+				{
+					float health = candidate.Health;
+					if (!best.IsValid || health > bestScore || (health == bestScore && candidate.UniqueId < best.UniqueId))
+					{
+						best = candidate;
+						bestScore = health;
+					}
+
+					break;
+				}
+				case SoldierTargetingRule.Assassin:
+				{
+					float health = candidate.Health;
+					if (!best.IsValid || health < bestScore || (health == bestScore && candidate.UniqueId < best.UniqueId))
+					{
+						best = candidate;
+						bestScore = health;
+					}
+
+					break;
+				}
+				default:
+				{
+					float distanceSquared = Vector3.DistanceSquared(candidate.Position, soldier.Position);
+					if (!best.IsValid || distanceSquared < bestScore || (distanceSquared == bestScore && candidate.UniqueId < best.UniqueId))
+					{
+						best = candidate;
+						bestScore = distanceSquared;
+					}
+
+					break;
+				}
+			}
+		}
+
+		return best;
+	}
+
+	private static bool IsTargetCandidate(IGameAPI api, UnitId candidate, int playerIndex, Vector3 soldierPosition, float acquisitionRangeSquared)
+	{
+		if (!candidate.IsValid || candidate.IsDead) return false;
+		if (candidate.Player == playerIndex) return false;
+		if (api.ArePlayersAllied(candidate.Player, playerIndex)) return false;
+		if (candidate.Invulnerable) return false;
+		if (candidate.IsBuilding && api.GetUnitConstructionProgress(candidate) < 1f) return false;
+
+		return Vector3.DistanceSquared(candidate.Position, soldierPosition) <= acquisitionRangeSquared;
+	}
+
+	private static bool IsRelicAbility(string abilityId)
+	{
+		for (int index = 0; index < RelicIds.Length; index++)
+		{
+			if (RelicIds[index] == abilityId) return true;
+		}
+
+		return false;
+	}
+
+	private static void RegisterRelicVendor(IGameAPI api)
+	{
+		for (int index = 0; index < RelicIds.Length; index++)
+		{
+			string relicId = RelicIds[index];
+			string tooltip = $"{RelicEffects[index]} Costs {RelicCost:0} gold and occupies one of the hero's six relic slots.";
+
+			api.RegisterAbility(relicId, RelicNames[index], tooltip, string.Empty, true);
+			api.AddUnitTypeAbility(NexusTemplateId, relicId);
+			api.SetAbilityTooltip(relicId, tooltip);
+			api.SetAbilityGridPosition(relicId, index, 2);
+			api.SetAbilityHotkey(relicId, RelicHotkeys[index]);
+			api.SetItemTooltip(relicId, tooltip);
+		}
+	}
+
+	private void BuyRelic(int playerIndex, string relicId)
+	{
+		int relicIndex = Array.IndexOf(RelicIds, relicId);
+		if (relicIndex < 0) return;
+
+		PlayerId player = _api.GetPlayer(playerIndex);
+		if (!player.IsActive) return;
+
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0 || new UnitId(heroEntityId).IsDead)
+		{
+			player.ShowFeedbackText("Your hero must be alive to buy a relic.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		UnitId hero = new(heroEntityId);
+		if (hero.HasItem(relicId))
+		{
+			player.ShowFeedbackText($"Your hero already holds {RelicNames[relicIndex]}.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		int heldRelics = CountRelics(hero);
+		if (heldRelics >= RelicSlotCount)
+		{
+			player.ShowFeedbackText("All six relic slots are full.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		if (player.Gold < RelicCost)
+		{
+			player.ShowFeedbackText($"A relic costs {RelicCost:0} gold.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		player.AdjustGold(-RelicCost);
+		if (!_api.AddItemToUnit(hero, relicId))
+		{
+			player.AdjustGold(RelicCost);
+			player.ShowFeedbackText("The relic could not be equipped.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		RefreshRelics(_api, player);
+		PublishHeroReadout(_api, player);
+		ApplyRelicVendorState(_api, player);
+		player.ShowFeedbackText($"{RelicNames[relicIndex]} is yours.", new Vector3(0.85f, 0.95f, 0.75f));
+		player.PlayClickSound();
+	}
+
+	private static int CountRelics(UnitId hero)
+	{
+		int held = 0;
+		for (int index = 0; index < RelicIds.Length; index++)
+		{
+			if (hero.HasItem(RelicIds[index])) held++;
+		}
+
+		return held;
+	}
+
+	private void ApplyRelicVendorState(IGameAPI api, PlayerId player)
+	{
+		int playerIndex = player.Value;
+		int nexusEntityId = _nexusEntities[playerIndex];
+		if (nexusEntityId <= 0) return;
+
+		var nexus = new UnitId(nexusEntityId);
+		if (nexus.IsDead) return;
+
+		int heroEntityId = _heroEntities[playerIndex];
+		var hero = new UnitId(heroEntityId);
+		bool heroAlive = heroEntityId > 0 && !hero.IsDead;
+
+		for (int index = 0; index < RelicIds.Length; index++)
+		{
+			bool owned = heroAlive && hero.HasItem(RelicIds[index]);
+			api.SetAbilityState(nexus, RelicIds[index], owned || !heroAlive, false);
+		}
+	}
+
+	private void PublishReadout(IGameAPI api, UnitId unit, int index, string name, string value)
+	{
+		if (!unit.IsValid || index < 0 || index >= ReadoutRowCount) return;
+
+		int slot = unit.UniqueId * ReadoutRowCount + index;
+		ulong signature = ((ulong)(uint)StringRegistry.GetOrAdd(name) << 32) | (uint)StringRegistry.GetOrAdd(value);
+		if (_readoutSignatures[slot] == signature) return;
+
+		_readoutSignatures[slot] = signature;
+		api.SetUnitTooltipText(unit, $"readout.{index}.name", name);
+		api.SetUnitTooltipText(unit, $"readout.{index}.value", value);
+	}
+
+	private void ClearReadoutRows(IGameAPI api, UnitId unit)
+	{
+		if (!unit.IsValid) return;
+
+		int start = unit.UniqueId * ReadoutRowCount;
+		for (int index = 0; index < ReadoutRowCount; index++)
+		{
+			_readoutSignatures[start + index] = 0;
+			api.SetUnitTooltipText(unit, $"readout.{index}.name", string.Empty);
+			api.SetUnitTooltipText(unit, $"readout.{index}.value", string.Empty);
+		}
+	}
+
+	private void PublishHeroReadout(IGameAPI api, PlayerId player)
+	{
+		int playerIndex = player.Value;
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		var hero = new UnitId(heroEntityId);
+		if (hero.IsDead) return;
+
+		int heldRelics = CountRelics(hero);
+		int optionCount = _draftOpen[playerIndex] != 0 ? _draftOptionCounts[playerIndex] : 0;
+
+		ulong state = (ulong)(uint)heldRelics;
+		state |= (ulong)(uint)optionCount << 8;
+		for (int index = 0; index < optionCount; index++)
+		{
+			state |= (ulong)(uint)_draftOptions[playerIndex * MaximumDraftOptions + index] << (16 + index * 6);
+		}
+
+		if (_heroReadoutStates[playerIndex] == state) return;
+		_heroReadoutStates[playerIndex] = state;
+
+		int templateIndex = _heroTemplateIndices[playerIndex];
+		string innate = templateIndex >= 0 && templateIndex < InnateNames.Length ? InnateNames[templateIndex] : string.Empty;
+		PublishReadout(api, hero, 0, "Innate", innate);
+		PublishReadout(api, hero, 1, "Relics", $"{heldRelics} / {RelicSlotCount}");
+
+		for (int index = 0; index < 3; index++)
+		{
+			if (index >= optionCount)
+			{
+				PublishReadout(api, hero, 3 + index, string.Empty, string.Empty);
+				continue;
+			}
+
+			int profileIndex = _draftOptions[playerIndex * MaximumDraftOptions + index];
+			PublishReadout(api, hero, 3 + index, "Offered", api.GetUnitName(SoldierProfiles[profileIndex].BuildingTemplateId));
+		}
+
+		PublishReadout(api, hero, 6, string.Empty, string.Empty);
+		PublishReadout(api, hero, 7, string.Empty, string.Empty);
+	}
+
+	private void RestoreRelicsToHero(IGameAPI api, int playerIndex, UnitId hero)
+	{
+		byte flags = _relicFlags[playerIndex];
+		for (int index = 0; index < RelicIds.Length; index++)
+		{
+			if ((flags & (1 << index)) == 0) continue;
+
+			api.AddItemToUnit(hero, RelicIds[index]);
+		}
+	}
+
+	private void PublishSoldierReadout(IGameAPI api, UnitId soldier, int profileIndex)
+	{
+		if (profileIndex < 0) return;
+
+		SoldierProfile profile = SoldierProfiles[profileIndex];
+		string formation = profile.Formation switch
+		{
+			SoldierFormation.Front => "Front",
+			SoldierFormation.Flank => "Flank",
+			_ => "Back"
+		};
+
+		string targeting = profile.TargetingRule switch
+		{
+			SoldierTargetingRule.TankShredder => "Tank-Shredder",
+			SoldierTargetingRule.Assassin => "Assassin",
+			_ => "Standard"
+		};
+
+		PublishReadout(api, soldier, 0, "Formation", formation);
+		PublishReadout(api, soldier, 1, "Targeting", targeting);
+		PublishReadout(api, soldier, 2, "Produced by", api.GetUnitName(profile.BuildingTemplateId));
+		PublishSourceChargeReadout(api, soldier);
+	}
+
+	private void PublishSourceChargeReadout(IGameAPI api, UnitId soldier)
+	{
+		int sourceEntityId = _sourceBuildings[soldier.UniqueId];
+		if (sourceEntityId <= 0) return;
+
+		var source = new UnitId(sourceEntityId);
+		if (source.IsDead)
+		{
+			PublishReadout(api, soldier, 3, "Charges", string.Empty);
+			return;
+		}
+
+		PublishReadout(api, soldier, 3, "Charges", $"{source.Charges} / {source.MaximumCharges}");
+	}
+
+	private void PublishBuildingReadout(IGameAPI api, UnitId building, int profileIndex, int charges)
+	{
+		int entityId = building.UniqueId;
+		int maintained = _soldierCounts[profileIndex];
+		int capacity = _capacityCounts[profileIndex];
+		bool producing = _producing[entityId] != 0;
+		int productionSeconds = producing ? (int)MathF.Ceiling(MathF.Max(0f, _productionTimers[entityId])) : 0;
+
+		ulong state = (ulong)(uint)profileIndex;
+		state |= (ulong)(uint)maintained << 8;
+		state |= (ulong)(uint)capacity << 16;
+		state |= (ulong)(uint)charges << 24;
+		state |= (ulong)(producing ? 1u : 0u) << 32;
+		state |= (ulong)(uint)productionSeconds << 33;
+		if (_buildingReadoutStates[entityId] == state) return;
+
+		_buildingReadoutStates[entityId] = state;
+
+		SoldierProfile profile = SoldierProfiles[profileIndex];
+		string production = producing
+			? $"Producing ({productionSeconds} s)"
+			: charges > 0 && maintained < capacity
+				? "Ready"
+				: maintained >= capacity
+					? "Capacity full"
+					: "Recharging";
+
+		PublishReadout(api, building, 0, "Unlocks", api.GetUnitName(profile.SoldierTemplateId));
+		PublishReadout(api, building, 1, "Capacity", $"{maintained} / {capacity}");
+		PublishReadout(api, building, 2, "Income", DescribeBuildingIncome(profile.BuildingTemplateId));
+		PublishReadout(api, building, 3, "Production", production);
+		PublishReadout(api, building, 4, string.Empty, string.Empty);
+		PublishReadout(api, building, 5, string.Empty, string.Empty);
+		PublishReadout(api, building, 6, string.Empty, string.Empty);
+		PublishReadout(api, building, 7, string.Empty, string.Empty);
+	}
+
 	private void PublishChargeBadge(IGameAPI api, PlayerId player, UnitId building, int charges)
 	{
 		int entityId = building.UniqueId;
@@ -1307,6 +1975,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		_lastBadgeValues[entityId] = charges + 1;
 		api.SetUnitOverheadBadge(building, charges, player.Color);
+
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId soldier = owned[index];
+			if (soldier.IsDead || soldier.IsBuilding) continue;
+			if (_sourceBuildings[soldier.UniqueId] != entityId) continue;
+
+			PublishSourceChargeReadout(api, soldier);
+		}
 	}
 
 	private void RefreshRelics(IGameAPI api, PlayerId player)
@@ -1327,6 +2005,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		_relicFlags[playerIndex] = flags;
 		if (flags == previousFlags) return;
+
+		ApplyRelicVendorState(api, player);
+		PublishHeroReadout(api, player);
 
 		if ((flags & (1 << 0)) != 0 && (previousFlags & (1 << 0)) == 0)
 		{
@@ -1437,7 +2118,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private static bool IsFrontFormationSoldier(string templateId)
 	{
 		int profileIndex = FindProfileIndexBySoldier(templateId);
-		return profileIndex >= 0 && SoldierProfiles[profileIndex].FrontFormation;
+		return profileIndex >= 0 && SoldierProfiles[profileIndex].Formation == SoldierFormation.Front;
 	}
 
 	private static int FindProfileIndexBySoldier(string templateId)
