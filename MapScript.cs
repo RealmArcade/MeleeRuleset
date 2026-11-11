@@ -1327,7 +1327,14 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			SetDraftAbilityVisible(api, playerIndex, abilityId, visible);
 		}
 
-		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, _draftOpen[playerIndex] != 0);
+		bool draftOpen = _draftOpen[playerIndex] != 0;
+		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, draftOpen);
+
+		// Begin Construction refuses while a draw is open, so leaving its card on the grid spent one of the twelve slots
+		// on a command the player could not use and pushed the last offered package onto a second page. With it gone the
+		// three packages, the abandon command and the nine ordinary commands are exactly one page.
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId > 0) api.SetAbilityState(new UnitId(heroEntityId), ConstructionAbilityId, draftOpen, draftOpen);
 	}
 
 	private void SetDraftAbilityVisible(IGameAPI api, int playerIndex, string abilityId, bool visible)
