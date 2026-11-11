@@ -15,20 +15,26 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
+	private const string BlueprintTemplateId = "unit/blueprint";
+	private const string WorkerTemplateId = "unit/building_worker";
 	private const float BuildingWoodCost = 100f;
 	private const int DefaultDraftOptionCount = 3;
 	private const int MaximumDraftOptions = 24;
 	private const int DraftRow = 2;
 	private const int DraftAbandonSlot = 3;
-	private const int MaximumPopulation = 80;
+	private const int MaximumPopulation = 40;
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
 	private const float UnderAttackAlertCooldownSeconds = 8f;
 	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
 	private const float RevivalSecondsCap = 45f;
-	private const float IncomeTickSeconds = 1f;
-	private const float IncomeTaxPerBuilding = 0.15f;
+	// A worker swings once a second, and the number each building advertises is what one swing takes from the node and
+	// pays back at the building. Nothing multiplies that number by a clock: how often a worker gets to swing is decided by
+	// how far it has to walk, so a node next to the building pays more than one across the board.
+	private const float WorkerSwingSeconds = 1f;
+	private const float WorkerCheckSeconds = 1f;
+	private const float WorkerSearchRadius = 400f;
 	private const float CinderMarkDamagePerSecond = 6f;
 	private const float CinderfieldRadius = 5f;
 	private const float CinderfieldDamagePerSecond = 25f;
@@ -102,8 +108,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private readonly record struct BuildingProfile(
 		string TemplateId,
-		float GoldPerMinute,
-		float WoodPerMinute);
+		float GoldPerSwing,
+		float WoodPerSwing);
 
 	private static readonly string[] HeroTemplateIds = { "hero/vale", "hero/sable", "hero/corvus" };
 	private static readonly string[] HeroFactionNames = { "Vale", "Sable", "Corvus" };
@@ -132,7 +138,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"Front-formation soldiers gain 10% maximum health.",
 		"Soldier-building recharge is 10% faster.",
 		"Owned buildings return 25% of the damage they take.",
-		"Passive building income is 10% higher.",
+		"Workers carry 10% more from every swing.",
 		"All owned units gain 10 Tenacity.",
 		"Soldier-building recharge is 10% faster."
 	};
@@ -174,15 +180,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private static readonly float[] ConstructionSecondsByProfile = { 30f, 30f, 30f, 30f, 30f, 30f, 35f, 35f, 35f };
 
-	private static readonly string[] DraftHotkeys =
-	{
-		"Z", "X", "C", "A", "S", "D", "F", "G", "Q", "W", "E", "R",
-		"T", "Y", "U", "I", "O", "P", "J", "K", "L", "N", "M", "B"
-	};
+	// How close the hero has to stand for its presence to count as working the site. It is roughly a building's footprint,
+	// so the hero has to be at the site rather than anywhere on the board.
+	private const float ConstructionWorkRadius = 6f;
 
 	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * MaximumDraftOptions];
+	private readonly int[] _draftSiteEntities = new int[EcsSharedMemory.MAX_PLAYERS];
+	private readonly int[] _draftSiteRetirements = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _draftSitePositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _draftSitePositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
 	private int _deckTakenBuildings;
@@ -196,6 +202,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private bool _mirroredDraft;
 	private bool _openPoolDrafting;
 
+	private readonly byte[] _constructionStallNotified = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _heroEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _nexusEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _heroDeaths = new int[EcsSharedMemory.MAX_PLAYERS];
@@ -236,7 +243,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly float[] _nexusPositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
 
 	private IGameAPI _api = null!;
-	private float _incomeTimer;
+	private readonly int[] _workerBuildingOf = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _workerNodeOf = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _workerResourceOf = new byte[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _workerSwingOf = new float[EcsSharedMemory.MAX_ENTITIES];
+	private float _workerCheckTimer;
 	private float _bulwarkTimer;
 
 	public void Initialize(IGameAPI api)
@@ -297,6 +308,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	public void Update(IGameAPI api, float delta)
 	{
+		RetireDraftSites(api);
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
 
 		for (int index = 0; index < players.Length; index++)
@@ -313,17 +325,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			AdvanceOwnConstruction(api, player, delta);
 		}
 
+		MaintainWorkers(api, players, delta);
 		UpdateCinderfields(api, delta);
 		UpdateDamageAffinity(api, delta);
 
 		_bulwarkTimer += delta;
 		bool recalculateBulwark = _bulwarkTimer >= BulwarkRecalculateSeconds;
 		if (recalculateBulwark) _bulwarkTimer = 0f;
-
-		_incomeTimer += delta;
-		bool applyIncome = _incomeTimer >= IncomeTickSeconds;
-		float incomeDelta = _incomeTimer;
-		if (applyIncome) _incomeTimer = 0f;
 
 		for (int index = 0; index < players.Length; index++)
 		{
@@ -333,7 +341,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			RefreshRelics(api, player);
 			PublishHeroReadout(api, player);
 			if (recalculateBulwark) RefreshBulwark(api, player);
-			if (applyIncome) ApplyIncome(api, player, incomeDelta);
 			ApplyCinderMarks(api, player, delta);
 		}
 	}
@@ -556,6 +563,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ResetUnitRuntimeState(soldier.UniqueId);
 		_sourceBuildings[soldier.UniqueId] = building.UniqueId;
 		api.EnableUnitAutoCombat(soldier, false);
+		api.SetUnitPlayerOrdersLocked(soldier, true);
 		_soldierControlled[soldier.UniqueId] = 1;
 		PublishSoldierReadout(api, soldier, FindProfileIndexBySoldier(profile.SoldierTemplateId));
 
@@ -570,35 +578,126 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ApplyRelicsToUnit(api, player.Value, soldier);
 	}
 
-	private void ApplyIncome(IGameAPI api, PlayerId player, float delta)
+	/// <summary>
+	///     Gives every finished building the worker that carries its economy, once. The worker walks the building's node
+	///     and back on its own; what the building advertises is one swing's worth, so a node across the board pays its
+	///     building less than one beside it without anyone computing the difference.
+	/// </summary>
+	private void SpawnBuildingWorker(IGameAPI api, PlayerId player, UnitId building, BuildingProfile profile)
 	{
-		int playerIndex = player.Value;
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		float goldPerMinute = 0f;
-		float woodPerMinute = 0f;
-		int functionalBuildings = 0;
+		byte resource = profile.GoldPerSwing > 0f ? (byte)1 : profile.WoodPerSwing > 0f ? (byte)2 : (byte)0;
+		if (resource == 0) return;
 
-		for (int index = 0; index < owned.Length; index++)
+		Vector3 origin = building.Position;
+		var position = new Vector2(origin.X, origin.Z);
+		UnitId worker = player.SpawnUnit(WorkerTemplateId, position, true, true);
+		if (!worker.IsValid) return;
+
+		int workerId = worker.UniqueId;
+		_workerBuildingOf[workerId] = building.UniqueId;
+		_workerResourceOf[workerId] = resource;
+		_workerSwingOf[workerId] = resource == 1 ? profile.GoldPerSwing : profile.WoodPerSwing;
+		_workerNodeOf[workerId] = 0;
+
+		api.SetUnitInvulnerable(worker, true);
+		api.SetUnitPlayerOrdersLocked(worker, true);
+		api.EnableUnitAutoCombat(worker, false);
+
+		AssignWorkerToNearestNode(api, workerId, building, resource);
+	}
+
+	private void AssignWorkerToNearestNode(IGameAPI api, int workerId, UnitId building, byte resource)
+	{
+		UnitId worker = new(workerId);
+		if (worker.IsDead) return;
+
+		ResourceNodeId node = FindNearestNode(api, building.Position, resource);
+		if (!node.IsValid)
 		{
-			UnitId unit = owned[index];
-			if (unit.IsDead || !unit.IsBuilding) continue;
-			if (!IsBuildingOperational(api, unit)) continue;
-
-			BuildingProfile profile = FindBuildingProfile(unit.TemplateID);
-			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
-
-			float taxDivisor = 1f + functionalBuildings * IncomeTaxPerBuilding;
-			goldPerMinute += profile.GoldPerMinute / taxDivisor;
-			woodPerMinute += profile.WoodPerMinute / taxDivisor;
-			functionalBuildings++;
+			_workerNodeOf[workerId] = 0;
+			return;
 		}
 
-		if (goldPerMinute <= 0f && woodPerMinute <= 0f) return;
+		api.IssueGatherOrder(worker, node);
+		api.SetUnitGatherSwing(worker, _workerSwingOf[workerId], WorkerSwingSeconds);
 
-		float incomeMultiplier = HasRelic(playerIndex, 3) ? 1.1f : 1f;
-		float secondsFraction = delta / 60f;
-		player.AdjustGold(goldPerMinute * incomeMultiplier * secondsFraction);
-		player.AdjustWood(woodPerMinute * secondsFraction);
+		// A node index is zero-based, so the state names it one higher and keeps zero for "no node".
+		_workerNodeOf[workerId] = node.Value + 1;
+	}
+
+	private static ResourceNodeId FindNearestNode(IGameAPI api, Vector3 origin, byte resource)
+	{
+		string wanted = resource == 2 ? "wood" : "gold";
+		ReadOnlySpan<ResourceNodeId> nodes = api.GetResourceNodes();
+		ResourceNodeId nearest = ResourceNodeId.Invalid;
+		float nearestDistanceSquared = WorkerSearchRadius * WorkerSearchRadius;
+
+		for (int index = 0; index < nodes.Length; index++)
+		{
+			ResourceNodeId node = nodes[index];
+			if (!string.Equals(api.GetResourceNodeType(node), wanted, StringComparison.OrdinalIgnoreCase)) continue;
+			if (api.GetResourceNodeAmount(node) <= 0.01f) continue;
+
+			Vector3 nodePosition = api.GetResourceNodePosition(node);
+			float offsetX = nodePosition.X - origin.X;
+			float offsetZ = nodePosition.Z - origin.Z;
+			float distanceSquared = offsetX * offsetX + offsetZ * offsetZ;
+			if (distanceSquared >= nearestDistanceSquared) continue;
+
+			nearestDistanceSquared = distanceSquared;
+			nearest = node;
+		}
+
+		return nearest;
+	}
+
+	/// <summary>
+	///     Keeps each building's worker on a node a few times a second: a worker whose building is gone is retired, and one
+	///     whose node has run dry is sent to the next nearest node of the same kind. A worker with no node left anywhere,
+	///     or the same player's other workers body-blocking it, is left where it stands rather than paid from nothing.
+	/// </summary>
+	private void MaintainWorkers(IGameAPI api, ReadOnlySpan<PlayerId> players, float delta)
+	{
+		_workerCheckTimer += delta;
+		if (_workerCheckTimer < WorkerCheckSeconds) return;
+		_workerCheckTimer = 0f;
+
+		for (int index = 0; index < players.Length; index++)
+		{
+			PlayerId player = players[index];
+			if (player.Value == 0 || !player.IsActive) continue;
+
+			ReadOnlySpan<UnitId> owned = player.GetUnits();
+			for (int unitIndex = 0; unitIndex < owned.Length; unitIndex++)
+			{
+				UnitId unit = owned[unitIndex];
+				if (unit.IsDead) continue;
+
+				int workerId = unit.UniqueId;
+				int buildingId = _workerBuildingOf[workerId];
+				if (buildingId == 0) continue;
+
+				// Deep Granaries is a swing's worth, not a clock's: the relic is read every check so buying it changes
+				// what the workers already walking are carrying rather than only the ones a later building raises.
+				float swing = _workerSwingOf[workerId] * (HasRelic(player.Value, 3) ? 1.1f : 1f);
+				api.SetUnitGatherSwing(unit, swing, WorkerSwingSeconds);
+
+				UnitId building = new(buildingId);
+				if (building.IsDead)
+				{
+					_workerBuildingOf[workerId] = 0;
+					_workerNodeOf[workerId] = 0;
+					_workerResourceOf[workerId] = 0;
+					api.DestroyUnit(unit, executeDespawnShader: false, playDeathAnimation: false);
+					continue;
+				}
+
+				int nodeState = _workerNodeOf[workerId];
+				if (nodeState > 0 && api.GetResourceNodeAmount(new ResourceNodeId(nodeState - 1)) > 0.01f) continue;
+
+				AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
+			}
+		}
 	}
 
 	/// <summary>
@@ -826,6 +925,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		PublishChargeBadge(_api, player, building, building.Charges);
 		ClearReadoutRows(_api, building);
 		PublishBuildingReadout(_api, building, profileIndex, building.Charges);
+		SpawnBuildingWorker(_api, player, building, FindBuildingProfile(building.TemplateID));
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
 	}
 
@@ -1258,17 +1358,30 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
+		// The blueprints stands where the player cast, and it is the thing that carries the draw: the packages appear in
+		// its command grid, so choosing one reads as choosing what to raise on that ground rather than as a second cast
+		// from the hero that already paid for the site.
+		UnitId blueprint = player.SpawnUnit(BlueprintTemplateId, new Vector2(position.X, position.Z), true, true);
+		if (!blueprint.IsValid)
+		{
+			player.ShowFeedbackText("The site could not be marked there.", new Vector3(1f, 0.7f, 0.3f));
+			return;
+		}
+
+		_api.SetUnitInvulnerable(blueprint, true);
+		_api.SetUnitCommandsFrozen(blueprint, true);
 		player.AdjustWood(-BuildingWoodCost);
 		_draftOpen[playerIndex] = 1;
 		_draftOptionCounts[playerIndex] = optionCount;
-		_draftSitePositionsX[playerIndex] = position.X;
-		_draftSitePositionsZ[playerIndex] = position.Z;
+		_draftSiteEntities[playerIndex] = blueprint.UniqueId;
+		Vector3 sitePosition = blueprint.Position;
+		_draftSitePositionsX[playerIndex] = sitePosition.X;
+		_draftSitePositionsZ[playerIndex] = sitePosition.Z;
 
 		for (int index = 0; index < optionCount; index++)
 		{
 			string templateId = SoldierProfiles[_draftOptions[playerIndex * MaximumDraftOptions + index]].BuildingTemplateId;
 			_api.SetAbilityGridPosition(templateId, index, DraftRow);
-			_api.SetAbilityHotkey(templateId, DraftHotkeys[index]);
 		}
 
 		ApplyDraftAbilityState(_api, playerIndex);
@@ -1405,23 +1518,57 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, {ScaledMaximumCharges(index)} charges every {profile.RechargeSeconds:0}s. Income {DescribeBuildingIncome(profile.BuildingTemplateId)}.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
-			AddDraftAbilityToCommandUnits(api, profile.BuildingTemplateId);
+			AddDraftAbilityToBlueprint(api, profile.BuildingTemplateId);
 			api.SetAbilityTooltip(profile.BuildingTemplateId, tooltip);
 		}
 
 		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
 		api.SetAbilityGridPosition(AbandonConstructionAbilityId, DraftAbandonSlot, DraftRow);
-		api.SetAbilityHotkey(AbandonConstructionAbilityId, "V");
-		AddDraftAbilityToCommandUnits(api, AbandonConstructionAbilityId);
+		AddDraftAbilityToBlueprint(api, AbandonConstructionAbilityId);
 	}
 
-	private static void AddDraftAbilityToCommandUnits(IGameAPI api, string abilityId)
+	private static void AddDraftAbilityToBlueprint(IGameAPI api, string abilityId)
 	{
-		api.AddUnitTypeAbility(NexusTemplateId, abilityId);
+		api.AddUnitTypeAbility(BlueprintTemplateId, abilityId);
+	}
 
-		for (int index = 0; index < HeroTemplateIds.Length; index++)
+	private void RetireDraftSite(int playerIndex)
+	{
+		int entityId = _draftSiteEntities[playerIndex];
+		_draftSiteEntities[playerIndex] = 0;
+		if (entityId <= 0) return;
+
+		_draftSiteRetirements[playerIndex] = entityId;
+
+		// The marker answers the draw, so its packages stop being offered at once even though the marker itself stands
+		// for one more tick: a selection made in that tick must not still read the draw it has already answered.
+		UnitId blueprint = new(entityId);
+		if (blueprint.IsDead) return;
+
+		for (int index = 0; index < SoldierProfiles.Length; index++)
 		{
-			api.AddUnitTypeAbility(HeroTemplateIds[index], abilityId);
+			_api.SetAbilityState(blueprint, SoldierProfiles[index].BuildingTemplateId, true, true);
+		}
+
+		_api.SetAbilityState(blueprint, AbandonConstructionAbilityId, true, true);
+	}
+
+	/// <summary>
+	///     Removes the markers of sites that were answered last tick. The blueprint is often the caster of the command that
+	///     answered it, so it is retired on the following update rather than while its own ability is still resolving.
+	/// </summary>
+	private void RetireDraftSites(IGameAPI api)
+	{
+		for (int playerIndex = 1; playerIndex < EcsSharedMemory.MAX_PLAYERS; playerIndex++)
+		{
+			int entityId = _draftSiteRetirements[playerIndex];
+			if (entityId <= 0) continue;
+
+			_draftSiteRetirements[playerIndex] = 0;
+			UnitId blueprint = new(entityId);
+			if (blueprint.IsDead) continue;
+
+			api.DestroyUnit(blueprint, executeDespawnShader: false, playDeathAnimation: false);
 		}
 	}
 
@@ -1434,30 +1581,26 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	{
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 
+		int blueprintEntityId = _draftSiteEntities[playerIndex];
+		UnitId blueprint = new(blueprintEntityId);
+		bool hasBlueprint = blueprintEntityId > 0 && !blueprint.IsDead;
+
 		for (int index = 0; index < SoldierProfiles.Length; index++)
 		{
+			if (!hasBlueprint) break;
+
 			string abilityId = SoldierProfiles[index].BuildingTemplateId;
 			bool visible = IsDraftOption(playerIndex, index);
-			SetDraftAbilityVisible(api, playerIndex, abilityId, visible);
+			api.SetAbilityState(blueprint, abilityId, !visible, !visible);
 		}
 
-		bool draftOpen = _draftOpen[playerIndex] != 0;
-		SetDraftAbilityVisible(api, playerIndex, AbandonConstructionAbilityId, draftOpen);
+		bool draftOpen = hasBlueprint && _draftOpen[playerIndex] != 0;
+		if (hasBlueprint) api.SetAbilityState(blueprint, AbandonConstructionAbilityId, !draftOpen, !draftOpen);
 
 		// Begin Construction refuses while a draw is open, so leaving its card on the grid spent one of the twelve slots
-		// on a command the player could not use and pushed the last offered package onto a second page. With it gone the
-		// three packages, the abandon command and the nine ordinary commands are exactly one page.
+		// on a command the player could not use and pushed the last offered package onto a second page.
 		int heroEntityId = _heroEntities[playerIndex];
 		if (heroEntityId > 0) api.SetAbilityState(new UnitId(heroEntityId), ConstructionAbilityId, draftOpen, draftOpen);
-	}
-
-	private void SetDraftAbilityVisible(IGameAPI api, int playerIndex, string abilityId, bool visible)
-	{
-		int heroEntityId = _heroEntities[playerIndex];
-		if (heroEntityId > 0) api.SetAbilityState(new UnitId(heroEntityId), abilityId, !visible, !visible);
-
-		int nexusEntityId = _nexusEntities[playerIndex];
-		if (nexusEntityId > 0) api.SetAbilityState(new UnitId(nexusEntityId), abilityId, !visible, !visible);
 	}
 
 	private bool IsDraftOption(int playerIndex, int profileIndex)
@@ -1500,17 +1643,29 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		UnitId site = _api.SpawnBuildingUnderConstruction(buildingTemplateId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
 		if (!site.IsValid)
 		{
+			RetireDraftSite(playerIndex);
 			player.AdjustWood(BuildingWoodCost);
 			player.ShowFeedbackText("The site could not be placed there.", new Vector3(1f, 0.3f, 0.25f));
 			ApplyDraftAbilityState(_api, playerIndex);
 			return;
 		}
 
+		RetireDraftSite(playerIndex);
+
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
 		// refuse does not cost the deck one of its nine buildings for the rest of the match.
 		if (!_openPoolDrafting) _deckTakenBuildings |= 1 << profileIndex;
 
 		ApplyDraftAbilityState(_api, playerIndex);
+
+		// The hero is the one who raises the building, so it walks to the site it just paid for. Progress only advances
+		// while it stands there, which is what makes leaving the work stopped where it was.
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId > 0)
+		{
+			UnitId hero = new(heroEntityId);
+			if (!hero.IsDead) _api.IssueMoveOrder(hero, position);
+		}
 
 		player.ShowFeedbackText($"{_api.GetUnitName(buildingTemplateId)} is under construction.", new Vector3(0.85f, 0.9f, 0.6f));
 		player.PlayClickSound();
@@ -1527,6 +1682,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		_draftOpen[playerIndex] = 0;
 		_draftOptionCounts[playerIndex] = 0;
+		RetireDraftSite(playerIndex);
 		ApplyDraftAbilityState(_api, playerIndex);
 
 		PlayerId player = _api.GetPlayer(playerIndex);
@@ -1537,20 +1693,48 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Advances the sites this match started through the draft. Nothing is working them, so the map is the clock that
-	///     builds them; the engine still announces each completion through OnConstructionFinished, where the charges start.
+	///     Advances the sites this player's hero is standing at. The hero does the work, so a site only rises while it is
+	///     there: walking away freezes the progress where it stood and coming back resumes it. The engine still announces
+	///     each completion through OnConstructionFinished, where the charges start.
 	/// </summary>
 	private void AdvanceOwnConstruction(IGameAPI api, PlayerId player, float delta)
 	{
 		if (delta <= 0f) return;
+
+		int playerIndex = player.Value;
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		UnitId hero = new(heroEntityId);
+		if (hero.IsDead) return;
+		Vector3 heroPosition = hero.Position;
 
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId building = owned[index];
 			if (building.IsDead || !building.IsBuilding) continue;
-			if (api.GetUnitConstructionProgress(building) >= 1f) continue;
+			if (api.GetUnitConstructionProgress(building) >= 1f)
+			{
+				_constructionStallNotified[building.Value] = 0;
+				continue;
+			}
 
+			Vector3 sitePosition = building.Position;
+			float offsetX = sitePosition.X - heroPosition.X;
+			float offsetZ = sitePosition.Z - heroPosition.Z;
+			if (offsetX * offsetX + offsetZ * offsetZ > ConstructionWorkRadius * ConstructionWorkRadius)
+			{
+				if (_constructionStallNotified[building.Value] == 0)
+				{
+					_constructionStallNotified[building.Value] = 1;
+					api.ShowFeedbackText("Your hero must stand at the site to raise it.", new Vector3(0.9f, 0.75f, 0.4f));
+				}
+
+				continue;
+			}
+
+			_constructionStallNotified[building.Value] = 0;
 			api.AdvanceUnitConstruction(building, delta);
 		}
 	}
@@ -1566,6 +1750,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_soldierControlled[entityId] = 0;
 		_sourceBuildings[entityId] = 0;
 		_buildingReadoutStates[entityId] = 0;
+		_constructionStallNotified[entityId] = 0;
 
 		int readoutStart = entityId * ReadoutRowCount;
 		for (int index = 0; index < ReadoutRowCount; index++)
@@ -1633,6 +1818,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (_soldierControlled[soldier.UniqueId] == 0)
 			{
 				api.EnableUnitAutoCombat(soldier, false);
+				api.SetUnitPlayerOrdersLocked(soldier, true);
 				_soldierControlled[soldier.UniqueId] = 1;
 			}
 
@@ -2280,8 +2466,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private static string DescribeBuildingIncome(string buildingTemplateId)
 	{
 		BuildingProfile building = FindBuildingProfile(buildingTemplateId);
-		if (building.GoldPerMinute > 0f) return $"{building.GoldPerMinute:0.#} gold/min";
-		if (building.WoodPerMinute > 0f) return $"{building.WoodPerMinute:0.#} wood/min";
+		if (building.GoldPerSwing > 0f) return $"{building.GoldPerSwing:0.#} gold a swing";
+		if (building.WoodPerSwing > 0f) return $"{building.WoodPerSwing:0.#} wood a swing";
 
 		return "none";
 	}
