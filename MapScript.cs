@@ -34,6 +34,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	// how far it has to walk, so a node next to the building pays more than one across the board.
 	private const float WorkerSwingSeconds = 1f;
 	private const float WorkerCheckSeconds = 1f;
+
+	// A player's k-th income building is paid the k-th share of what its worker delivers. Each share is smaller than the
+	// one before it, so every additional building adds less net income than the last without changing what the buildings
+	// already standing are paid, and the sum always rises: 1, 1.65, 2.15, 2.55 and 2.9 swings' worth at five buildings.
+	private static readonly float[] IncomeTaxShares = { 1f, 0.65f, 0.5f, 0.4f, 0.35f };
 	private const float WorkerSearchRadius = 400f;
 	private const float CinderMarkDamagePerSecond = 6f;
 	private const float CinderfieldRadius = 5f;
@@ -604,6 +609,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.EnableUnitAutoCombat(worker, false);
 
 		AssignWorkerToNearestNode(api, workerId, building, resource);
+		api.SetUnitGatherTaxRate(worker, ResolveIncomeTaxRate(player, building.UniqueId));
 	}
 
 	private void AssignWorkerToNearestNode(IGameAPI api, int workerId, UnitId building, byte resource)
@@ -692,12 +698,37 @@ public partial class MapScript : IWasmModule, ILobbyScript
 					continue;
 				}
 
+				api.SetUnitGatherTaxRate(unit, ResolveIncomeTaxRate(player, buildingId));
+
 				int nodeState = _workerNodeOf[workerId];
 				if (nodeState > 0 && api.GetResourceNodeAmount(new ResourceNodeId(nodeState - 1)) > 0.01f) continue;
 
 				AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
 			}
 		}
+	}
+
+	/// <summary>
+	///     Works out what share of its deliveries a building's worker keeps by ranking that building among the player's
+	///     income buildings, oldest first. The rank is what makes the tax marginal: a building keeps the share its rank was
+	///     given for as long as it stands, so raising another building never changes what an earlier one pays, and only the
+	///     new building takes the next, smaller share.
+	/// </summary>
+	private float ResolveIncomeTaxRate(PlayerId player, int buildingId)
+	{
+		int rank = 1;
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId unit = owned[index];
+			if (unit.IsDead) continue;
+
+			int home = _workerBuildingOf[unit.UniqueId];
+			if (home > 0 && home < buildingId) rank++;
+		}
+
+		int shareIndex = Math.Min(rank, IncomeTaxShares.Length) - 1;
+		return 1f - IncomeTaxShares[shareIndex];
 	}
 
 	/// <summary>
