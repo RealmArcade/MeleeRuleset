@@ -273,6 +273,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private IGameAPI _api = null!;
 	private readonly int[] _workerBuildingOf = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _workerNodeOf = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _workerResourceOf = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _workerPausedOf = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _workerCharges = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _workerChargeProgress = new float[EcsSharedMemory.MAX_ENTITIES];
@@ -666,6 +667,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.EnableUnitAutoCombat(worker, false);
 		api.SetUnitWorker(worker, true);
 		api.SetUnitWorkerAssignment(worker, profile.WorkerResourceType);
+
+		// The assignment the engine keeps on the worker is what the crew works, so the script reads it back once here
+		// rather than asking for the string on every worker check.
+		_workerResourceOf[workerId] = ResourceByteOf(api.GetUnitWorkerAssignment(worker));
 		api.SetUnitLevel(worker, Math.Max(1, _buildingConstructionOrder[buildingId]));
 
 		for (int index = 0; index < profile.WorkerBuffIds.Length; index++)
@@ -831,6 +836,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 				{
 					_workerBuildingOf[workerId] = 0;
 					_workerNodeOf[workerId] = 0;
+					_workerResourceOf[workerId] = 0;
 					api.DestroyUnit(unit, executeDespawnShader: false, playDeathAnimation: false);
 					continue;
 				}
@@ -848,19 +854,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 					continue;
 				}
 
-				byte resource = ResourceByteOf(api.GetUnitWorkerAssignment(unit));
-
 				if (_workerPausedOf[workerId] != 0)
 				{
 					_workerPausedOf[workerId] = 0;
-					AssignWorkerToNearestNode(api, workerId, building, resource);
+					AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
 					continue;
 				}
 
 				int nodeState = _workerNodeOf[workerId];
 				if (nodeState > 0 && api.GetResourceNodeAmount(new ResourceNodeId(nodeState - 1)) > 0.01f) continue;
 
-				AssignWorkerToNearestNode(api, workerId, building, resource);
+				AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
 			}
 		}
 	}
