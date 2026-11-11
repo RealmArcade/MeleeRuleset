@@ -1043,7 +1043,7 @@
         "TemplateID": "ability/shield_bash",
         "Name": "Shield Bash",
         "AbilityType": "target_spell",
-        "Description": "40 physical damage to a single enemy in reach.",
+        "Description": "40 physical damage and a 1.25 second stun to a single enemy in reach.",
         "ManaCost": 60,
         "Cooldown": 16,
         "TargetRange": 4,
@@ -1057,6 +1057,12 @@
             "Targets": "enemies",
             "Amount": 40,
             "DamageType": "physical"
+          },
+          {
+            "Kind": "stun",
+            "Delivery": "single",
+            "Targets": "enemies",
+            "Duration": 1.25
           }
         ]
       },
