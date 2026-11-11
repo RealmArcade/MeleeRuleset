@@ -16,7 +16,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
 	private const string BlueprintTemplateId = "unit/blueprint";
-	private const string WorkerTemplateId = "unit/building_worker";
+	private const string WorkerTemplateId = "unit/worker";
 	private const float BuildingWoodCost = 100f;
 	private const int DefaultDraftOptionCount = 3;
 	private const int MaximumDraftOptions = 24;
@@ -29,17 +29,23 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
 	private const float RevivalSecondsCap = 45f;
-	// A worker swings once a second, and the number each building advertises is what one swing takes from the node and
-	// pays back at the building. Nothing multiplies that number by a clock: how often a worker gets to swing is decided by
-	// how far it has to walk, so a node next to the building pays more than one across the board.
-	private const float WorkerSwingSeconds = 1f;
+	// A worker gathers with its attack: it hits a node as it would hit a unit, and every point of post-mitigation damage
+	// that lands is one piece of the node's item. How often it hits is its own attack cooldown, so a buff to attack raises
+	// income and a buff to movement shortens the walk. Neither number is estimated by the ruleset.
 	private const float WorkerCheckSeconds = 1f;
-
-	// A player's k-th income building is paid the k-th share of what its worker delivers. Each share is smaller than the
-	// one before it, so every additional building adds less net income than the last without changing what the buildings
-	// already standing are paid, and the sum always rises: 1, 1.65, 2.15, 2.55 and 2.9 swings' worth at five buildings.
-	private static readonly float[] IncomeTaxShares = { 1f, 0.65f, 0.5f, 0.4f, 0.35f };
 	private const float WorkerSearchRadius = 400f;
+	private const float PermanentBuffSeconds = 10_000_000f;
+
+	private const string WorkerHallBuffId = "buff/worker_hall";
+	private const string WorkerYardBuffId = "buff/worker_yard";
+	private const string WorkerLodgeBuffId = "buff/worker_lodge";
+	private const string WorkerRangeBuffId = "buff/worker_range";
+	private const string WorkerFoundryBuffId = "buff/worker_foundry";
+	private const string WorkerSlingBuffId = "buff/worker_sling";
+	private const string WorkerShrineBuffId = "buff/worker_shrine";
+	private const string WorkerSignalBuffId = "buff/worker_signal";
+	private const string WorkerBastionBuffId = "buff/worker_bastion";
+	private const string DeepGranariesWorkerBuffId = "buff/deep_granaries_worker";
 	private const float CinderMarkDamagePerSecond = 6f;
 	private const float CinderfieldRadius = 5f;
 	private const float CinderfieldDamagePerSecond = 25f;
@@ -115,8 +121,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private readonly record struct BuildingProfile(
 		string TemplateId,
-		float GoldPerSwing,
-		float WoodPerSwing);
+		int WorkerCapacity,
+		int WorkerCharges,
+		float WorkerRechargeSeconds,
+		float WorkerProductionSeconds,
+		string WorkerResourceType,
+		string[] WorkerBuffIds,
+		string WorkerBuffSummary);
 
 	private static readonly string[] HeroTemplateIds = { "hero/vale", "hero/sable", "hero/corvus" };
 	private static readonly string[] HeroFactionNames = { "Vale", "Sable", "Corvus" };
@@ -145,7 +156,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"Front-formation soldiers gain 10% maximum health.",
 		"Soldier-building recharge is 10% faster.",
 		"Owned buildings return 25% of the damage they take.",
-		"Workers carry 10% more from every swing.",
+		"Workers gain 10% attack.",
 		"All owned units gain 10 Tenacity.",
 		"Soldier-building recharge is 10% faster."
 	};
@@ -166,17 +177,27 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 6f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard)
 	};
 
+	private static readonly string[] HallWorkerBuffs = { WorkerHallBuffId };
+	private static readonly string[] YardWorkerBuffs = { WorkerYardBuffId };
+	private static readonly string[] LodgeWorkerBuffs = { WorkerLodgeBuffId };
+	private static readonly string[] RangeWorkerBuffs = { WorkerRangeBuffId };
+	private static readonly string[] FoundryWorkerBuffs = { WorkerFoundryBuffId };
+	private static readonly string[] SlingWorkerBuffs = { WorkerSlingBuffId };
+	private static readonly string[] ShrineWorkerBuffs = { WorkerShrineBuffId };
+	private static readonly string[] SignalWorkerBuffs = { WorkerSignalBuffId };
+	private static readonly string[] BastionWorkerBuffs = { WorkerBastionBuffId };
+
 	private static readonly BuildingProfile[] BuildingProfiles =
 	{
-		new("building/bulwark_hall", 30f, 0f),
-		new("building/warband_yard", 16f, 0f),
-		new("building/spear_lodge", 10f, 0f),
-		new("building/archery_range", 0f, 22f),
-		new("building/bolt_foundry", 0f, 8f),
-		new("building/sling_camp", 0f, 16f),
-		new("building/mender_shrine", 14f, 0f),
-		new("building/signal_post", 6f, 0f),
-		new("building/vigil_bastion", 10f, 0f)
+		new("building/bulwark_hall", 2, 1, 45f, 12f, "gold", HallWorkerBuffs, "+2 armor, +5% health"),
+		new("building/warband_yard", 2, 2, 30f, 8f, "gold", YardWorkerBuffs, "+20% attack"),
+		new("building/spear_lodge", 2, 1, 35f, 10f, "gold", LodgeWorkerBuffs, "+10% move speed"),
+		new("building/archery_range", 3, 2, 25f, 7f, "wood", RangeWorkerBuffs, "+15% attack"),
+		new("building/bolt_foundry", 1, 1, 50f, 14f, "wood", FoundryWorkerBuffs, "+40% attack, -10% move speed"),
+		new("building/sling_camp", 3, 3, 20f, 6f, "wood", SlingWorkerBuffs, "+10% attack"),
+		new("building/mender_shrine", 1, 1, 40f, 12f, "gold", ShrineWorkerBuffs, "+1 armor, +15% move speed"),
+		new("building/signal_post", 2, 1, 30f, 9f, "gold", SignalWorkerBuffs, "+25% attack"),
+		new("building/vigil_bastion", 2, 1, 35f, 10f, "gold", BastionWorkerBuffs, "+2 armor, +10% health")
 	};
 
 	private readonly float[] _productionTimers = new float[EcsSharedMemory.MAX_ENTITIES];
@@ -253,8 +274,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly int[] _workerBuildingOf = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _workerNodeOf = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _workerPausedOf = new byte[EcsSharedMemory.MAX_ENTITIES];
-	private readonly byte[] _workerResourceOf = new byte[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _workerSwingOf = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _workerCharges = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _workerChargeProgress = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _workerProductionProgress = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly byte[] _workerProducing = new byte[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _buildingConstructionOrder = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _playerConstructionCount = new int[EcsSharedMemory.MAX_PLAYERS];
 	private float _workerCheckTimer;
 	private float _bulwarkTimer;
 
@@ -279,6 +304,21 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.RegisterBuffModifier("buff/forced_march", "MovementSpeed", true, 0.2f);
 		api.RegisterBuffModifier("buff/standard_aura", "MovementSpeed", true, 0.1f);
 		api.RegisterBuffModifier("buff/cinder_mark", "HpRegen", false, 0f);
+
+		api.RegisterBuffModifier(WorkerHallBuffId, "Armor", false, 2f);
+		api.RegisterBuffModifier(WorkerHallBuffId, "MaxHp", true, 0.05f);
+		api.RegisterBuffModifier(WorkerYardBuffId, "Attack", true, 0.2f);
+		api.RegisterBuffModifier(WorkerLodgeBuffId, "MovementSpeed", true, 0.1f);
+		api.RegisterBuffModifier(WorkerRangeBuffId, "Attack", true, 0.15f);
+		api.RegisterBuffModifier(WorkerFoundryBuffId, "Attack", true, 0.4f);
+		api.RegisterBuffModifier(WorkerFoundryBuffId, "MovementSpeed", true, -0.1f);
+		api.RegisterBuffModifier(WorkerSlingBuffId, "Attack", true, 0.1f);
+		api.RegisterBuffModifier(WorkerShrineBuffId, "Armor", false, 1f);
+		api.RegisterBuffModifier(WorkerShrineBuffId, "MovementSpeed", true, 0.15f);
+		api.RegisterBuffModifier(WorkerSignalBuffId, "Attack", true, 0.25f);
+		api.RegisterBuffModifier(WorkerBastionBuffId, "Armor", false, 2f);
+		api.RegisterBuffModifier(WorkerBastionBuffId, "MaxHp", true, 0.1f);
+		api.RegisterBuffModifier(DeepGranariesWorkerBuffId, "Attack", true, 0.1f);
 
 		for (int index = 0; index < _lastAlertTimes.Length; index++)
 		{
@@ -327,6 +367,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UpdateArmyLevel(api, player);
 			UpdateRevival(api, player);
 			UpdateProduction(api, player, delta);
+			UpdateWorkerProduction(api, player, delta);
 			UpdateHeroMemory(api, player);
 			UpdateArmyBehaviour(api, player);
 			ApplyAutoCasts(api, player, delta);
@@ -597,13 +638,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Gives every finished building the worker that carries its economy, once. The worker walks the building's node
-	///     and back on its own; what the building advertises is one swing's worth, so a node across the board pays its
-	///     building less than one beside it without anyone computing the difference.
+	///     Raises one worker for a building. Every building raises the same worker template, at the level of the order the
+	///     building itself was constructed in, and it carries that building's own permanent buffs, so two buildings with the
+	///     same worker template gather at different rates without either of them stating one.
 	/// </summary>
-	private void SpawnBuildingWorker(IGameAPI api, PlayerId player, UnitId building, BuildingProfile profile)
+	private void SpawnWorker(IGameAPI api, PlayerId player, UnitId building, BuildingProfile profile)
 	{
-		byte resource = profile.GoldPerSwing > 0f ? (byte)1 : profile.WoodPerSwing > 0f ? (byte)2 : (byte)0;
+		byte resource = ResourceByteOf(profile.WorkerResourceType);
 		if (resource == 0) return;
 
 		Vector3 origin = building.Position;
@@ -612,18 +653,103 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (!worker.IsValid) return;
 
 		int workerId = worker.UniqueId;
-		_workerBuildingOf[workerId] = building.UniqueId;
-		_workerResourceOf[workerId] = resource;
-		_workerSwingOf[workerId] = resource == 1 ? profile.GoldPerSwing : profile.WoodPerSwing;
+		int buildingId = building.UniqueId;
+		_workerBuildingOf[workerId] = buildingId;
 		_workerNodeOf[workerId] = 0;
+		_workerPausedOf[workerId] = 0;
 
-		api.SetUnitInvulnerable(worker, true);
 		api.SetUnitPlayerOrdersLocked(worker, true);
 		api.EnableUnitAutoCombat(worker, false);
 		api.SetUnitWorker(worker, true);
+		api.SetUnitWorkerAssignment(worker, profile.WorkerResourceType);
+		api.SetUnitLevel(worker, Math.Max(1, _buildingConstructionOrder[buildingId]));
+
+		for (int index = 0; index < profile.WorkerBuffIds.Length; index++)
+		{
+			api.AddBuff(worker, profile.WorkerBuffIds[index], PermanentBuffSeconds);
+		}
+
+		if (HasRelic(player.Value, 3)) api.AddBuff(worker, DeepGranariesWorkerBuffId, PermanentBuffSeconds);
 
 		AssignWorkerToNearestNode(api, workerId, building, resource);
-		api.SetUnitGatherTaxRate(worker, ResolveIncomeTaxRate(player, building.UniqueId));
+	}
+
+	private static byte ResourceByteOf(string resourceType)
+	{
+		if (string.Equals(resourceType, "gold", StringComparison.OrdinalIgnoreCase)) return 1;
+		if (string.Equals(resourceType, "wood", StringComparison.OrdinalIgnoreCase)) return 2;
+
+		return 0;
+	}
+
+	/// <summary>
+	///     Raises a building's workers with the same charge algorithm its soldiers use, on the building's own worker
+	///     numbers: a charge is spent when worker capacity is open, the spent charge becomes a worker after the building's
+	///     worker production time, and charges refill on its worker recharge. The worker numbers are separate from the
+	///     soldier numbers, so a package can be strong in one and weak in the other.
+	/// </summary>
+	private void UpdateWorkerProduction(IGameAPI api, PlayerId player, float delta)
+	{
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int buildingIndex = 0; buildingIndex < owned.Length; buildingIndex++)
+		{
+			UnitId building = owned[buildingIndex];
+			if (building.IsDead || !building.IsBuilding) continue;
+
+			BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
+			if (!IsBuildingOperational(api, building)) continue;
+
+			int buildingId = building.UniqueId;
+
+			if (_workerCharges[buildingId] < profile.WorkerCharges)
+			{
+				_workerChargeProgress[buildingId] += delta;
+				while (_workerChargeProgress[buildingId] >= profile.WorkerRechargeSeconds
+				       && _workerCharges[buildingId] < profile.WorkerCharges)
+				{
+					_workerChargeProgress[buildingId] -= profile.WorkerRechargeSeconds;
+					_workerCharges[buildingId]++;
+				}
+			}
+			else
+			{
+				_workerChargeProgress[buildingId] = 0f;
+			}
+
+			if (_workerProducing[buildingId] != 0)
+			{
+				_workerProductionProgress[buildingId] += delta;
+				if (_workerProductionProgress[buildingId] < profile.WorkerProductionSeconds) continue;
+
+				_workerProducing[buildingId] = 0;
+				_workerProductionProgress[buildingId] = 0f;
+				SpawnWorker(api, player, building, profile);
+				continue;
+			}
+
+			if (_workerCharges[buildingId] <= 0) continue;
+			if (CountWorkersOfBuilding(owned, buildingId) >= profile.WorkerCapacity) continue;
+
+			_workerCharges[buildingId]--;
+			_workerProducing[buildingId] = 1;
+			_workerProductionProgress[buildingId] = 0f;
+		}
+	}
+
+	private int CountWorkersOfBuilding(ReadOnlySpan<UnitId> owned, int buildingId)
+	{
+		int workers = 0;
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId unit = owned[index];
+			if (unit.IsDead) continue;
+			if (_workerBuildingOf[unit.UniqueId] != buildingId) continue;
+
+			workers++;
+		}
+
+		return workers;
 	}
 
 	private void AssignWorkerToNearestNode(IGameAPI api, int workerId, UnitId building, byte resource)
@@ -639,7 +765,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		api.IssueGatherOrder(worker, node);
-		api.SetUnitGatherSwing(worker, _workerSwingOf[workerId], WorkerSwingSeconds);
 
 		// A node index is zero-based, so the state names it one higher and keeps zero for "no node".
 		_workerNodeOf[workerId] = node.Value + 1;
@@ -697,17 +822,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 				int buildingId = _workerBuildingOf[workerId];
 				if (buildingId == 0) continue;
 
-				// Deep Granaries is a swing's worth, not a clock's: the relic is read every check so buying it changes
-				// what the workers already walking are carrying rather than only the ones a later building raises.
-				float swing = _workerSwingOf[workerId] * (HasRelic(player.Value, 3) ? 1.1f : 1f);
-				api.SetUnitGatherSwing(unit, swing, WorkerSwingSeconds);
-
 				UnitId building = new(buildingId);
 				if (building.IsDead)
 				{
 					_workerBuildingOf[workerId] = 0;
 					_workerNodeOf[workerId] = 0;
-					_workerResourceOf[workerId] = 0;
 					api.DestroyUnit(unit, executeDespawnShader: false, playDeathAnimation: false);
 					continue;
 				}
@@ -725,44 +844,21 @@ public partial class MapScript : IWasmModule, ILobbyScript
 					continue;
 				}
 
+				byte resource = ResourceByteOf(api.GetUnitWorkerAssignment(unit));
+
 				if (_workerPausedOf[workerId] != 0)
 				{
 					_workerPausedOf[workerId] = 0;
-					AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
+					AssignWorkerToNearestNode(api, workerId, building, resource);
 					continue;
 				}
-
-				api.SetUnitGatherTaxRate(unit, ResolveIncomeTaxRate(player, buildingId));
 
 				int nodeState = _workerNodeOf[workerId];
 				if (nodeState > 0 && api.GetResourceNodeAmount(new ResourceNodeId(nodeState - 1)) > 0.01f) continue;
 
-				AssignWorkerToNearestNode(api, workerId, building, _workerResourceOf[workerId]);
+				AssignWorkerToNearestNode(api, workerId, building, resource);
 			}
 		}
-	}
-
-	/// <summary>
-	///     Works out what share of its deliveries a building's worker keeps by ranking that building among the player's
-	///     income buildings, oldest first. The rank is what makes the tax marginal: a building keeps the share its rank was
-	///     given for as long as it stands, so raising another building never changes what an earlier one pays, and only the
-	///     new building takes the next, smaller share.
-	/// </summary>
-	private float ResolveIncomeTaxRate(PlayerId player, int buildingId)
-	{
-		int rank = 1;
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId unit = owned[index];
-			if (unit.IsDead) continue;
-
-			int home = _workerBuildingOf[unit.UniqueId];
-			if (home > 0 && home < buildingId) rank++;
-		}
-
-		int shareIndex = Math.Min(rank, IncomeTaxShares.Length) - 1;
-		return 1f - IncomeTaxShares[shareIndex];
 	}
 
 	/// <summary>
@@ -984,13 +1080,23 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
 		float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
 
+		// The worker every building raises matches the order the building itself was constructed in, so the first
+		// building's workers are first level and the next building's are one level above them.
+		int buildingId = building.UniqueId;
+		int constructionOrder = _playerConstructionCount[playerIndex] + 1;
+		_playerConstructionCount[playerIndex] = constructionOrder;
+		_buildingConstructionOrder[buildingId] = constructionOrder;
+		_workerCharges[buildingId] = 1;
+		_workerChargeProgress[buildingId] = 0f;
+		_workerProductionProgress[buildingId] = 0f;
+		_workerProducing[buildingId] = 0;
+
 		PlayerId player = _api.GetPlayer(playerIndex);
 		_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
 		_api.SetUnitChargeCount(building, ScaledMaximumCharges(profileIndex) > 0 ? 1 : 0);
 		PublishChargeBadge(_api, player, building, building.Charges);
 		ClearReadoutRows(_api, building);
 		PublishBuildingReadout(_api, building, profileIndex, building.Charges);
-		SpawnBuildingWorker(_api, player, building, FindBuildingProfile(building.TemplateID));
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
 	}
 
@@ -1580,7 +1686,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			SoldierProfile profile = SoldierProfiles[index];
 			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
-			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, {ScaledMaximumCharges(index)} charges every {profile.RechargeSeconds:0}s. Income {DescribeBuildingIncome(profile.BuildingTemplateId)}.";
+			BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
+			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, {ScaledMaximumCharges(index)} charges every {profile.RechargeSeconds:0}s. Workers gather {workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s each, gaining {workerProfile.WorkerBuffSummary}.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
 			AddDraftAbilityToBlueprint(api, profile.BuildingTemplateId);
@@ -2344,7 +2451,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		PublishReadout(api, building, 0, "Unlocks", api.GetUnitName(profile.SoldierTemplateId));
 		PublishReadout(api, building, 1, "Capacity", $"{maintained} / {capacity}");
-		PublishReadout(api, building, 2, "Income", DescribeBuildingIncome(profile.BuildingTemplateId));
+		BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
+		PublishReadout(api, building, 2, "Workers", $"{workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s; {workerProfile.WorkerBuffSummary}");
 		PublishReadout(api, building, 3, "Production", production);
 		PublishReadout(api, building, 4, string.Empty, string.Empty);
 		PublishReadout(api, building, 5, string.Empty, string.Empty);
@@ -2415,6 +2523,24 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if ((flags & (1 << 4)) != 0 && (previousFlags & (1 << 4)) == 0)
 		{
 			ApplyWardensWrit(api, player);
+		}
+
+		if ((flags & (1 << 3)) != 0 && (previousFlags & (1 << 3)) == 0)
+		{
+			ApplyDeepGranaries(api, player);
+		}
+	}
+
+	private void ApplyDeepGranaries(IGameAPI api, PlayerId player)
+	{
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId unit = owned[index];
+			if (unit.IsDead) continue;
+			if (_workerBuildingOf[unit.UniqueId] <= 0) continue;
+
+			api.AddBuff(unit, DeepGranariesWorkerBuffId, PermanentBuffSeconds);
 		}
 	}
 
@@ -2541,15 +2667,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		return -1;
-	}
-
-	private static string DescribeBuildingIncome(string buildingTemplateId)
-	{
-		BuildingProfile building = FindBuildingProfile(buildingTemplateId);
-		if (building.GoldPerSwing > 0f) return $"{building.GoldPerSwing:0.#} gold a swing";
-		if (building.WoodPerSwing > 0f) return $"{building.WoodPerSwing:0.#} wood a swing";
-
-		return "none";
 	}
 
 	private static BuildingProfile FindBuildingProfile(string templateId)
