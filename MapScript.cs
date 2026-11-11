@@ -788,7 +788,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.AddStatModifier(nexus, "Armor", false, functionalBuildings * BulwarkArmorPerBuilding, "bulwark/buildings");
 		api.AddStatModifier(nexus, "MagicResistance", false, functionalBuildings * BulwarkMagicResistancePerBuilding, "bulwark/buildings");
 
-		PublishReadout(api, hero, 2, "Bulwark", $"{nearbySoldiers} soldiers, {functionalBuildings} buildings");
+		string soldiers = nearbySoldiers == 1 ? "soldier" : "soldiers";
+		string buildings = functionalBuildings == 1 ? "building" : "buildings";
+		PublishReadout(api, hero, 2, "Bulwark", $"{nearbySoldiers} {soldiers}, {functionalBuildings} {buildings}");
 	}
 
 	private void HandleConstructionFinished(UnitId building)
