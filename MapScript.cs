@@ -484,6 +484,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		{
 			UnitId unit = owned[index];
 			if (unit.IsDead || unit.IsHero || unit.IsBuilding) continue;
+
+			// A worker's level is the construction order of the building that raised it, so the army's growth never
+			// reaches it: a later building is how a player raises a stronger worker.
+			if (_workerBuildingOf[unit.UniqueId] > 0) continue;
 			if (unit.Level == heroLevel) continue;
 
 			api.SetUnitLevel(unit, heroLevel);
