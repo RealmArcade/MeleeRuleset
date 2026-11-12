@@ -31,9 +31,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
 	private const float RevivalSecondsCap = 45f;
-	// A worker gathers with its attack: it hits a node as it would hit a unit, and every point of post-mitigation damage
-	// that lands is one piece of the node's item. How often it hits is its own attack cooldown, so a buff to attack raises
-	// income and a buff to movement shortens the walk. Neither number is estimated by the ruleset.
+	// A worker gathers with its attack: it hits a node as it would hit a unit, and the damage that gets through the node's
+	// resistances is turned into pieces of the node's item by the node's own yield, one piece per four points. How often it
+	// hits is its own attack cooldown, so a buff to attack raises income and a buff to movement shortens the walk. Neither
+	// number is estimated by the ruleset.
 	private const float WorkerCheckSeconds = 1f;
 	private const float WorkerSearchRadius = 400f;
 	private const float PermanentBuffSeconds = 10_000_000f;
