@@ -64,12 +64,12 @@
         "ExperiencePerLevel": 200,
         "MaxLevel": 6,
         "LevelGrowth": {
-          "StrengthPerLevel": 3.2,
-          "AgilityPerLevel": 2.4,
-          "VitalityPerLevel": 14,
-          "IntelligencePerLevel": 3.0,
-          "WisdomPerLevel": 1.2,
-          "FortunePerLevel": 1.0
+          "StrengthPerLevel": 4,
+          "AgilityPerLevel": 1.8,
+          "VitalityPerLevel": 15,
+          "IntelligencePerLevel": 2.2,
+          "WisdomPerLevel": 0.6,
+          "FortunePerLevel": 0.4
         },
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
         "VisualMode": "Mesh",
@@ -122,12 +122,12 @@
         "ExperiencePerLevel": 200,
         "MaxLevel": 6,
         "LevelGrowth": {
-          "StrengthPerLevel": 3.2,
-          "AgilityPerLevel": 2.4,
-          "VitalityPerLevel": 14,
-          "IntelligencePerLevel": 3.0,
-          "WisdomPerLevel": 1.2,
-          "FortunePerLevel": 1.0
+          "StrengthPerLevel": 1.2,
+          "AgilityPerLevel": 2,
+          "VitalityPerLevel": 11,
+          "IntelligencePerLevel": 4.4,
+          "WisdomPerLevel": 1.4,
+          "FortunePerLevel": 0.6
         },
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
         "VisualMode": "Mesh",
@@ -180,12 +180,12 @@
         "ExperiencePerLevel": 200,
         "MaxLevel": 6,
         "LevelGrowth": {
-          "StrengthPerLevel": 3.2,
-          "AgilityPerLevel": 2.4,
-          "VitalityPerLevel": 14,
-          "IntelligencePerLevel": 3.0,
-          "WisdomPerLevel": 1.2,
-          "FortunePerLevel": 1.0
+          "StrengthPerLevel": 2.2,
+          "AgilityPerLevel": 2.2,
+          "VitalityPerLevel": 12,
+          "IntelligencePerLevel": 2.5,
+          "WisdomPerLevel": 1,
+          "FortunePerLevel": 2.8
         },
         "ModelPath": "orc_warrior_7.rmesh",
         "VisualMode": "Mesh",
