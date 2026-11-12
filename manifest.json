@@ -47,7 +47,7 @@
       "AGENTS.md": "e77b2bc5e7427bbaec0d832b35e624a4a657ca6cf6731b3271e33be7bd2a8f6f",
       "Directory.Build.targets": "7424a53a847319e9ea56b8b31bc476b685d84b940eabfaa3a17ef2fa9bfe20b3",
       "LICENSE.md": "cf7660fe2a1e73d981dd627c1f47b53992d3135f14dd6fdd3b7d87cd4c1daa05",
-      "MapScript.cs": "34c68e98778de16ec5b3d7ef984fd919f7f87cf60c6689744987ed12d71e9e31",
+      "MapScript.cs": "0faed55b14d455922c3dbb135efd3fcb564923548bb7b5743e2732f706a84d82",
       "MapScript.csproj": "f0e2e3698d2c152cf4362eb414f2f1f413faee74302c744fb5731d5baa2cbed9",
       "MapScript.DamageAffinity.cs": "7ed07c09f85c523116d462a459f9fc22c82f7fdb34843570a082a07d10ccb4e9",
       "MapScript.Instructions.cs": "827b5ec377929f22eeb79d74426c943c80336a5f175cbb7ceb22c483eb29a8d9",
@@ -57,18 +57,18 @@
       "README.md": "2268813a20941d8e5891039b01250c29a67bba5057a27d2191ad3b36e27dba19",
       "realm_lldb.py": "7a1f12b546518397e27af3c14c9f9f036e78d176d1b04a1a66b228055fea7db4",
       "WasmEntryPoint.g.cs": "8d2e5daae484dcc48df66298fd3cbe0e7d62b5ac98645d30fb750f2a7b9e391a",
-      "lib/Realm.Ecs.dll": "0d38bc43f38de243b755a8fa088ddf3e88314a1ef3d864899a333554f9ff51ae",
-      "lib/Realm.Ecs.pdb": "4c05450c595b4315823e8ed86799991ccd0181288e771e374d973d7889610d59",
+      "lib/Realm.Ecs.dll": "f34d8758100424ec833e649158ece60c86c236e0a1d8c358e0cf063516542661",
+      "lib/Realm.Ecs.pdb": "2ad74e9b933b0888f3267aa692bb354bb7d9b9db06ca3dd67e63492abaa1cc2b",
       "lib/Realm.Ecs.xml": "c7cee57af350890ccb83d867d2c2f6c23c0fb65645a05ff9b29093fca6e71af1",
-      "lib/Realm.EditorAPI.dll": "fae415f319d7b0ca826c76279e92dd987596c711c0e64bf4fc660df5c00dd5e2",
-      "lib/Realm.EditorAPI.pdb": "a9f9be3749bc4c4e086afe7080560b3f6daa1f44b3da96efaad7ae7b4e326f2f",
+      "lib/Realm.EditorAPI.dll": "67155c94e1735158bc0fc37ec93c9276fb06e1e3eaf3473ee517446f4dbdb0d0",
+      "lib/Realm.EditorAPI.pdb": "e5a7d9a4b59c05928fe5f64eff7d7473fcb2ecaabcc82621efc114a6f243c02c",
       "lib/Realm.EditorAPI.xml": "50e8bd6228bb31024451fa67b66cb082a5616a5f26b5230588c4ec2b9cdd5fe3",
-      "lib/Realm.MapAPI.dll": "8d2cb49bf12f82daaafc5e57687f712a239d6b86a114bbc1912b526859cb46ac",
-      "lib/Realm.MapAPI.pdb": "e5fcf6efcf69929a645f0ca6d79f56a40101c47624e215560cc41f259ad46e74",
+      "lib/Realm.MapAPI.dll": "2ee0ef7f7c1c27337620dc5b8e7d9d56393392a646e7726379e0b89f53377148",
+      "lib/Realm.MapAPI.pdb": "aa1f262991b7ad14de815a6df51ed0b3987da8dbcba225d22e8312657d6ccffa",
       "lib/Realm.MapAPI.xml": "8a1b3537032002d0d57b87d11d1117fa6afb61846a8cc33b6be3bcd81849baff",
       "wit/game.g.wit": "c3996d8e592a4091b6006fe5f9935516c27fc9dc44b7486ab392859deb9a6a17",
-      "bin/script/MapScript.wasm": "099aa59d8ae9cf18fca8fcd65f99d522af79b1afdaf9a77aac7f250938be47a9",
-      "bin/Release/net10.0/wasi-wasm/native/MapScript.wasm": "099aa59d8ae9cf18fca8fcd65f99d522af79b1afdaf9a77aac7f250938be47a9"
+      "bin/script/MapScript.wasm": "66c62979776cfedc2fd320e55eb4e52eb096f98db9d1b7b5b16a52075d6c59dd",
+      "bin/Release/net10.0/wasi-wasm/native/MapScript.wasm": "66c62979776cfedc2fd320e55eb4e52eb096f98db9d1b7b5b16a52075d6c59dd"
     }
   }
 }
