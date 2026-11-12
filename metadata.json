@@ -611,8 +611,12 @@
         "MovementType": "Ground",
         "SightRange": 14,
         "AcquisitionRange": 11,
-        "GoldBounty": 55,
-        "XpBounty": 40,
+        "Level": 2,
+        "LevelGrowth": {
+          "BountyMultiplierPerLevel": 1.0
+        },
+        "GoldBounty": 28,
+        "XpBounty": 20,
         "RespawnSeconds": 45,
         "ModelPath": "orc_warrior_7.rmesh",
         "VisualMode": "Mesh",
@@ -646,8 +650,12 @@
         "MovementType": "Ground",
         "SightRange": 14,
         "AcquisitionRange": 11,
-        "GoldBounty": 180,
-        "XpBounty": 140,
+        "Level": 4,
+        "LevelGrowth": {
+          "BountyMultiplierPerLevel": 1.0
+        },
+        "GoldBounty": 45,
+        "XpBounty": 35,
         "RespawnSeconds": 120,
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
         "VisualMode": "Mesh",
