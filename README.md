@@ -8,7 +8,7 @@ The `ugc-SecludedCrest` repository is the composing map: its `references.json` n
 
 | Into | What this map contributes |
 | :--- | :--- |
-| Secluded Crest v1.0.0 | `MapScript.cs`, the rules script itself, and the melee templates this map's `metadata.json` declares - units, buildings, abilities, relics and the two harvestable resource node types - plus the factions, deck and economy the script runs. |
+| Secluded Crest v1.0.0 | `MapScript.cs`, the rules script itself, the melee templates this map's `metadata.json` declares - units, buildings, abilities, relics and the two harvestable resource node types - plus the factions, deck and economy the script runs, and the `locale/*.json` catalogs that translate all of it. |
 
 ## The board supplies the placement
 
@@ -20,7 +20,7 @@ This map declares no `terrain.json` and no coordinates of its own. Where the nin
 
 `metadata.json` here is merged into the board's: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and the board merges last, so the board's own identity, build number, shroud and camera stand while the rules, units, abilities and relics arrive from here.
 
-Every other file comes whole from exactly one map. `MapScript.cs` is the one file the board's `references.json` states comes from this map, because the ruleset is defined here; `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md` and `.gitignore` are kept by the board, which builds and maintains its own copies. `MapTemplates.g.cs` and `WasmEntryPoint.g.cs` are never taken from a referenced map at all.
+Every other file comes whole from exactly one map. `MapScript.cs` is the one file the board's `references.json` states comes from this map, because the ruleset is defined here; the `locale/*.json` catalogs come from here too, so the text this ruleset shows a player is translated on the board that composes it. `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md` and `.gitignore` are kept by the board, which builds and maintains its own copies. `MapTemplates.g.cs` and `WasmEntryPoint.g.cs` are never taken from a referenced map at all.
 
 ### Prerequisites
 
@@ -57,7 +57,7 @@ Every other file comes whole from exactly one map. `MapScript.cs` is the one fil
 
 ## Localization
 
-A player reads this ruleset in the language they pick in Settings → Game → Language. The catalogs are `locale/{code}.json`, flat `{"English text": "translated text"}` files that the client merges over the game's own when the map loads, so every player reads the same match in their own language and nothing about it runs in WASM. Shipped: `es`, `fr`, `de`, `pt`, `ru`, `zh`, `ja`, `ko`, `ar` and `hi`; a missing entry reads as the English text, so no file has to be complete for a match to be readable.
+A player reads this ruleset in the language they pick in Settings → Game → Language. The catalogs are `locale/{code}.json`, flat `{"English text": "translated text"}` files that the client merges over the game's own when the map loads, so every player reads the same match in their own language and nothing about it runs in WASM. They are files of this package like any other, so a board that composes this map takes them along with `MapScript.cs` and ships the same translations without translating anything itself. Shipped: `es`, `fr`, `de`, `pt`, `ru`, `zh`, `ja`, `ko`, `ar` and `hi`; a missing entry reads as the English text, so no file has to be complete for a match to be readable.
 
 What is translated: every template name and description in `metadata.json`, every feedback line the script shows a player (through `api.Translate` at the point it is shown, with `{0}` for the numbers so a translation can move them), the four instructions pages, the relic cards, the draft card tooltip - published as a `{{Ability.Key}}` template so the sentence is one key and the numbers are filled in after it - and the buff names and stat phrases the script publishes. A line the script composes at run time from a value it measures - a worker crew's name, a building's Bulwark totals, the burn a Cinder Mark is doing, the reservation note on an unidentified site - is published in English, because there is no string for a catalog to key.
 
