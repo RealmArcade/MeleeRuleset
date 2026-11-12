@@ -17,6 +17,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
+	private const string AbandonConstructionIconPath = "wood_logs.rtex";
 	private const string ConstructionSiteTemplateId = "building/construction_site";
 	private const string ReservationNoteKey = "state.note";
 	private const string WorkerTemplateId = "unit/worker";
@@ -116,7 +117,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		float ProductionSeconds,
 		float AcquisitionRange,
 		SoldierFormation Formation,
-		SoldierTargetingRule TargetingRule);
+		SoldierTargetingRule TargetingRule,
+		string BuildingIconPath);
 
 	private readonly record struct BuildingProfile(
 		string TemplateId,
@@ -166,15 +168,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private static readonly SoldierProfile[] SoldierProfiles =
 	{
-		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard),
-		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 12f, SoldierFormation.Front, SoldierTargetingRule.TankShredder),
-		new("unit/bowman", "building/archery_range", 8, 4, 18f, 12f, SoldierFormation.Back, SoldierTargetingRule.Assassin),
-		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 14f, SoldierFormation.Back, SoldierTargetingRule.TankShredder),
-		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 12f, SoldierFormation.Back, SoldierTargetingRule.Standard),
-		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard)
+		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard, "golden_champion_shield.rtex"),
+		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard, "sword_and_shield.rtex"),
+		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 12f, SoldierFormation.Front, SoldierTargetingRule.TankShredder, "golden_spear.rtex"),
+		new("unit/bowman", "building/archery_range", 8, 4, 18f, 12f, SoldierFormation.Back, SoldierTargetingRule.Assassin, "elf_archer.rtex"),
+		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard, "warrior_tomahawk.rtex"),
+		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 14f, SoldierFormation.Back, SoldierTargetingRule.TankShredder, "siege_cannon.rtex"),
+		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 12f, SoldierFormation.Back, SoldierTargetingRule.Standard, "magic_healing_light.rtex"),
+		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard, "blue_crusade_banner.rtex"),
+		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard, "defensive_shield.rtex")
 	};
 
 	private static readonly string[] HallWorkerBuffs = { WorkerHallBuffId };
@@ -1869,7 +1871,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
 			BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
 
-			api.RegisterAbility(profile.BuildingTemplateId, buildingName, draftTooltip, string.Empty, true);
+			api.RegisterAbility(profile.BuildingTemplateId, buildingName, draftTooltip, profile.BuildingIconPath, true);
 			AddDraftAbilityToSite(api, profile.BuildingTemplateId);
 			api.SetAbilityTooltip(profile.BuildingTemplateId, draftTooltip);
 			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Building", buildingName);
@@ -1883,7 +1885,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Buff", workerProfile.WorkerBuffSummary);
 		}
 
-		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
+		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", AbandonConstructionIconPath, true);
 		api.SetAbilityGridPosition(AbandonConstructionAbilityId, DraftAbandonSlot, DraftRow);
 		AddDraftAbilityToSite(api, AbandonConstructionAbilityId);
 	}
