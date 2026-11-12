@@ -1031,27 +1031,24 @@
         </member>
         <member name="T:Realm.Ecs.Components.Resources.Gatherer">
             <summary>
-                Stores the gathering state for a worker unit entity, including the resource type, the amount each swing takes
-                from the node, how long a swing lasts, what the worker carries and where it is taking it.
+                Stores the gathering state of a unit working a harvestable node: the node it works, the item that node yields,
+                how far into its next swing it is, and whether it is taking what it has acquired to a drop-off to sell.
             </summary>
         </member>
-        <member name="F:Realm.Ecs.Components.Resources.Gatherer.SwingAmount">
-            <summary>Gets or sets the amount one swing takes from the node, or zero to take what the node advertises.</summary>
-        </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.SwingSeconds">
-            <summary>Gets or sets the seconds one swing lasts, or zero to swing once a second.</summary>
+            <summary>Gets or sets the seconds one swing lasts, or zero to swing at the unit's own attack interval.</summary>
         </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.SwingProgress">
             <summary>Gets or sets the seconds accumulated toward the swing the worker is taking.</summary>
         </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.GatherTaxRate">
-            <summary>Gets or sets the fraction of each delivered swing the map keeps, or zero to pay the whole swing.</summary>
+            <summary>Gets or sets the fraction of each piece sold the map keeps, or zero to pay the whole sale.</summary>
         </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.PendingIncomeRemainder">
-            <summary>Gets or sets the fraction of a resource the worker has earned but not yet been paid, so a taxed delivery stays exact over a run.</summary>
+            <summary>Gets or sets the fraction of a resource the worker has earned but not yet been paid, so a taxed sale stays exact over a run.</summary>
         </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.ItemStringId">
-            <summary>Gets or sets the item the node yields, which is what the worker carries home and pays back.</summary>
+            <summary>Gets or sets the item the node yields, which is what the worker carries in its inventory and sells at a drop-off.</summary>
         </member>
         <member name="F:Realm.Ecs.Components.Resources.Gatherer.HarvestRemainder">
             <summary>Gets or sets the fraction of a point of the node's health the last hit earned but had not yet filled.</summary>
@@ -1066,6 +1063,15 @@
                 Marks a node whose health is its remaining resource, states which item a piece of it is, and states how many
                 pieces one point of post-mitigation damage is worth.
             </summary>
+        </member>
+        <member name="T:Realm.Ecs.Components.Resources.PickupTask">
+            <summary>
+                Tracks the ground item a unit was sent to collect. The item is taken only while the unit stands within the
+                item's own pickup radius, so the order is a walk followed by a collection rather than a remote pickup.
+            </summary>
+        </member>
+        <member name="F:Realm.Ecs.Components.Resources.PickupTask.LootEntity">
+            <summary>Gets or sets the ground item this unit is walking to.</summary>
         </member>
         <member name="T:Realm.Ecs.Components.Resources.PlayerResources">
             <summary>
@@ -2077,7 +2083,7 @@
             Attribute gain per level, independent of where the authored curve came from.
             </summary>
         </member>
-        <member name="M:Realm.Ecs.Services.LevelGrowth.#ctor(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+        <member name="M:Realm.Ecs.Services.LevelGrowth.#ctor(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
             <summary>
             Attribute gain per level, independent of where the authored curve came from.
             </summary>
@@ -2085,7 +2091,8 @@
         <member name="T:Realm.Ecs.Services.LevelService">
             <summary>
             Turns a unit's level into attribute growth through the shared modifier pipeline, so level
-            scaling composes with items, upgrades and buffs instead of bypassing them.
+            scaling composes with items, upgrades and buffs instead of bypassing them. A level may also
+            raise the bounty the unit pays, which is how a monster's worth follows its level.
             </summary>
         </member>
         <member name="T:Realm.Ecs.Services.MapRulesCatalog">
@@ -2324,8 +2331,9 @@
             <summary>
                 Works the node the worker is standing at, one hit at a time. The hit is the unit's own attack, resolved against
                 the node's resistances, so the resource a node loses is the damage the worker would have dealt in combat and the
-                pieces it yields are that damage in items. A worker that cannot hold another piece carries what it has home,
-                which is what makes the walk, the hit rate and the damage all show up in income.
+                pieces it yields are the items the worker acquires into its inventory. A worker that cannot hold another piece
+                takes what it has to a drop-off and sells it, which is what makes the walk, the hit rate and the damage all
+                show up in income.
             </summary>
         </member>
         <member name="T:Realm.Ecs.Services.RouteReachabilityEntry">

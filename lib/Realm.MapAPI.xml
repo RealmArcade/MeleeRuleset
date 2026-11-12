@@ -415,7 +415,7 @@
         <member name="M:Realm.MapAPI.GameAPI.HandleCommandSink.SetUnitPlayerOrdersLocked(Realm.Ecs.UnitId,System.Boolean)">
             <summary>Locks the unit to the map script that drives it, or hands it back to its player.</summary>
         </member>
-        <member name="M:Realm.MapAPI.GameAPI.HandleCommandSink.SetUnitGatherSwing(Realm.Ecs.UnitId,System.Single,System.Single)">
+        <member name="M:Realm.MapAPI.GameAPI.HandleCommandSink.SetUnitGatherInterval(Realm.Ecs.UnitId,System.Single)">
             <summary>States what one gathering swing takes from a node and how long the swing lasts.</summary>
         </member>
         <member name="M:Realm.MapAPI.GameAPI.HandleCommandSink.SetUnitGatherTaxRate(Realm.Ecs.UnitId,System.Single)">
@@ -1976,22 +1976,14 @@
             <param name="value">Row value text.</param>
             <param name="color">Optional RGB tint for the label text.</param>
         </member>
-        <member name="M:Realm.MapAPI.IGameAPI.SpawnLootItem(System.String,System.Numerics.Vector3,System.Int32,System.Single)">
+        <member name="M:Realm.MapAPI.IGameAPI.SpawnLootItem(System.String,System.Numerics.Vector2,System.Int32,System.Single)">
             <summary>
-            Spawns a pickup loot item at the specified 3D world space coordinates.
+            Spawns a pickup loot item at a point on the ground, the way <see cref="M:Realm.MapAPI.IGameAPI.SpawnUnitForPlayer(System.String,System.Numerics.Vector2,System.Int32,System.Boolean,System.Boolean)" /> does:
+            the point states where on the board the item lies and the engine reads the terrain's height there, so a map never
+            has to sample the height field to drop something that lands on the ground.
             </summary>
             <param name="itemTypeId">The identifier of the item type from the item registry.</param>
-            <param name="position">The coordinates in 3D world space where the item will be spawned.</param>
-            <param name="charges">The initial charge count or stacked quantity for the item.</param>
-            <param name="lifetime">The duration in seconds before the item automatically despawns, or 0 if indefinite.</param>
-            <returns>The spawned loot item identifier.</returns>
-        </member>
-        <member name="M:Realm.MapAPI.IGameAPI.SpawnLootItemAtLocation(System.String,System.Numerics.Vector3,System.Int32,System.Single)">
-            <summary>
-            Spawns a pickup loot item at the specified 3D world space coordinates.
-            </summary>
-            <param name="itemTypeId">The identifier of the item type from the item registry.</param>
-            <param name="position">The coordinates in 3D world space where the item will be spawned.</param>
+            <param name="position">The ground position in 2D board space (X, Z); the height comes from the terrain.</param>
             <param name="charges">The initial charge count or stacked quantity for the item.</param>
             <param name="lifetime">The duration in seconds before the item automatically despawns, or 0 if indefinite.</param>
             <returns>The spawned loot item identifier.</returns>
@@ -2949,20 +2941,18 @@
             <param name="unit">The unit to lock to its map.</param>
             <param name="value">True to refuse player orders; false to accept them again.</param>
         </member>
-        <member name="M:Realm.MapAPI.IGameAPI.SetUnitGatherSwing(Realm.Ecs.UnitId,System.Single,System.Single)">
+        <member name="M:Realm.MapAPI.IGameAPI.SetUnitGatherInterval(Realm.Ecs.UnitId,System.Single)">
             <summary>
-            States how much one gathering swing takes from a node and how long that swing lasts.
+            States how long one gathering swing lasts, which is the cadence a worker works a node at.
             </summary>
             <remarks>
-            A gather order sets the worker going; this states what a swing is worth. The amount is taken from the node and
-            carried back to a dropoff one swing at a time, so a player is paid exactly what its nodes lost and the trip's
-            length is what decides the real rate: a near node is worked more often than a far one at the same swing value.
-            Leaving the amount at zero makes the worker take whatever the node advertises as its harvest rate, and leaving the
-            seconds at zero makes one swing take a second. The call does nothing for a unit that is not gathering.
+            A gather order sets the worker going; this states how long each of its swings takes. What a swing takes from the
+            node is decided by the node's yield and the worker's own attack, so a map overrides the rhythm rather than the
+            amount, and leaving the seconds at zero falls back to the unit's attack interval. The call does nothing for a unit
+            that is not gathering.
             </remarks>
             <param name="unit">The gathering unit.</param>
-            <param name="swingAmount">The amount one swing takes from the node, or zero to use the node's own harvest rate.</param>
-            <param name="swingSeconds">The seconds one swing lasts, or zero for one second.</param>
+            <param name="swingSeconds">The seconds one swing lasts, or zero to swing at the unit's own attack interval.</param>
         </member>
         <member name="M:Realm.MapAPI.IGameAPI.SetUnitGatherTaxRate(Realm.Ecs.UnitId,System.Single)">
             <summary>
@@ -3321,8 +3311,8 @@
         <member name="M:Realm.MapAPI.IGameAPI.GetSpawnAnchorCount">
             <summary>
             Gets how many player starting points the map instance the match is playing declares.
-            A spawn anchor joins a player slot to a point on the board, and it is authored with the board's terrain instead
-            of in a script, so one ruleset can be played on any board that seats its players. A map that declares none
+            A spawn anchor joins a player slot to a named coordinate of the board, and it is authored with the board's terrain
+            instead of in a script, so one ruleset can be played on any board that seats its players. A map that declares none
             answers zero, which is how a script tells a board meant for it apart from one it was pointed at by mistake.
             </summary>
             <returns>The number of spawn anchors the loaded map declares.</returns>
@@ -3330,17 +3320,23 @@
         <member name="M:Realm.MapAPI.IGameAPI.GetSpawnAnchor(System.Int32)">
             <summary>
             Gets where the map instance places the starting point of one player slot.
-            The point is snapped to the ground of the loaded terrain, so it is a position a starting building can be placed
-            at and a camera can be moved to without the script reading a height field itself. A slot the map declares no
-            anchor for answers <see cref="P:System.Numerics.Vector3.Zero"/>.
+            The anchor is the coordinate the board seats that slot inside, and the point is picked within it when the match
+            begins, so two players assigned the same ground do not stand on the identical step. The point is snapped to the
+            ground of the loaded terrain, so it is a position a starting building can be placed at and a camera can be moved to
+            without the script reading a height field itself. A slot the map declares no usable anchor for is seated anywhere on
+            the board, so this never answers a point a match cannot use.
             </summary>
             <param name="playerSlot">The one-based player slot the lobby seats a player in, as the map's own slot numbering states it.</param>
-            <returns>The ground position of that slot's anchor, or <see cref="P:System.Numerics.Vector3.Zero"/> when the map declares none for it.</returns>
+            <returns>The ground position of that slot's anchor, or a point anywhere on the board when the map declares none for it.</returns>
         </member>
         <member name="M:Realm.MapAPI.IGameAPI.GetUnitConstructionProgress(Realm.Ecs.UnitId)">
             <summary>
             Reports how far a building site has been built, as a fraction from zero to one. A unit that is not a building
             site answers one, so a caller may ask any unit without first knowing what state it is in.
+            A site's health is this same fraction of its maximum health, because the bar over a building being raised is its
+            construction rather than a second reading of it; a site also regenerates no health and no mana until it is whole,
+            so a map cannot bank a building's production before the building exists and must not treat a site's missing health
+            as damage to be mended.
             </summary>
             <param name="unit">The building site.</param>
             <returns>The completed fraction of its construction time.</returns>
@@ -5697,8 +5693,8 @@
         <member name="F:Realm.MapAPI.Components.ScriptPlayer.IsComputerByte">
             <summary>Backing byte indicating whether the player is controlled by AI (1 if AI, 0 if human).</summary>
         </member>
-        <member name="F:Realm.MapAPI.Components.ScriptPlayer.Reserved0">
-            <summary>Reserved alignment padding byte.</summary>
+        <member name="F:Realm.MapAPI.Components.ScriptPlayer.Placement">
+            <summary>Final placement of the player's team in the match ranking, one for the team that outlasted the others and zero while no ranking has been recorded.</summary>
         </member>
         <member name="F:Realm.MapAPI.Components.ScriptPlayer.Reserved1">
             <summary>Reserved alignment padding byte.</summary>
