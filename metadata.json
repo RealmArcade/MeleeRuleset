@@ -659,41 +659,6 @@
         "IsHero": false
       },
       {
-        "TemplateID": "unit/blueprint",
-        "Name": "Blueprint",
-        "Description": "A building site waiting for the package the deck offered. Select it to choose which building rises here.",
-        "MaxHp": 1,
-        "Damage": 0,
-        "Range": 0,
-        "Armor": 0,
-        "Speed": 2.5,
-        "AttackCooldown": 2.0,
-        "ScanRadius": 0,
-        "CostGold": 0,
-        "CostWood": 0,
-        "CostStone": 0,
-        "PopCost": 0,
-        "ProductionTime": 0,
-        "HpRegen": 0,
-        "MaxMana": 0,
-        "ManaRegen": 0,
-        "DamageType": "physical",
-        "MovementType": "Ground",
-        "SightRange": 4,
-        "AcquisitionRange": 0,
-        "GoldBounty": 0,
-        "XpBounty": 0,
-        "ModelPath": "scroll_and_scroll_holder.rmesh",
-        "VisualMode": "Mesh",
-        "Scale": 1.4,
-        "YOffset": 0.6,
-        "CollisionCircle": 1.2,
-        "PathingType": 32,
-        "Abilities": null,
-        "IsHero": false,
-        "ConstructionRange": 4.0
-      },
-      {
         "TemplateID": "unit/worker",
         "Name": "Worker",
         "Description": "A worker raised by a building. It attacks a node of its assigned resource, and the damage that lands is turned into pieces of wood or gold carried in its inventory until it is delivered.",
@@ -774,6 +739,34 @@
           "item/wardens_writ",
           "item/muster_bell"
         ]
+      },
+      {
+        "TemplateID": "building/construction_site",
+        "Name": "Construction Site",
+        "Description": "A site that has not been committed to a building yet. Every player can select it to read the buildings its owner has reserved for it.",
+        "MaxHp": 1,
+        "Armor": 0,
+        "CostGold": 0,
+        "CostWood": 0,
+        "CostStone": 0,
+        "PopCost": 0,
+        "ProductionTime": 0,
+        "HpRegen": 0,
+        "DamageType": "physical",
+        "MovementType": "Ground",
+        "SightRange": 20,
+        "AcquisitionRange": 0,
+        "GoldBounty": 0,
+        "XpBounty": 0,
+        "ModelPath": "scroll_and_scroll_holder.rmesh",
+        "VisualMode": "Mesh",
+        "Scale": 1.4,
+        "YOffset": 0.6,
+        "CollisionCircle": 1.2,
+        "PathingType": 32,
+        "Abilities": null,
+        "IsHero": false,
+        "ConstructionRange": 4.0
       },
       {
         "TemplateID": "building/bulwark_hall",
@@ -1420,6 +1413,11 @@
             "Amount": 22
           }
         ],
+        "AutoCast": {
+          "Enabled": true,
+          "TargetRule": "MostWoundedAlly",
+          "AllyHealthPercentBelow": 0.9
+        },
         "IconPath": "magic_healing_light.rtex"
       },
       {
@@ -1440,6 +1438,10 @@
             "Duration": 8
           }
         ],
+        "AutoCast": {
+          "Enabled": true,
+          "TargetRule": "LowestHealthAlly"
+        },
         "IconPath": "blue_magic_shield.rtex"
       },
       {
@@ -1461,17 +1463,21 @@
             "BuffId": "buff/standard_aura"
           }
         ],
+        "AutoCast": {
+          "Enabled": true,
+          "TargetRule": "AllyWithoutEffect"
+        },
         "IconPath": "blue_crusade_banner.rtex"
       },
       {
         "TemplateID": "ability/begin_construction",
         "Name": "Begin Construction",
         "AbilityType": "target_spell",
-        "Description": "Costs 100 wood. Place the site from the silhouette, then pick one of the buildings the shared deck draws for it; right-click the site to raise it.",
+        "Description": "Costs 100 wood. Place an unidentified site from the silhouette, then pick one of the buildings the shared deck draws for it; the site becomes that building and is raised by right-clicking it.",
         "ManaCost": 0,
         "Cooldown": 0,
         "TargetRange": 8,
-        "PlacementTemplateId": "unit/blueprint",
+        "PlacementTemplateId": "building/construction_site",
         "GridX": 3,
         "GridY": 0,
         "IconPath": "golden_hammers.rtex"
@@ -1490,7 +1496,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1508,7 +1514,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1525,7 +1531,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1543,7 +1549,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1560,7 +1566,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1578,7 +1584,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1595,7 +1601,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1613,7 +1619,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1630,7 +1636,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1648,7 +1654,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1665,7 +1671,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1683,7 +1689,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1700,7 +1706,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1718,7 +1724,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1735,7 +1741,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1753,7 +1759,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {
@@ -1770,7 +1776,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false,
+          "TargetRule": "Self",
           "ManaReserve": 100.0
         }
       },
@@ -1788,7 +1794,7 @@
         "GridY": 0,
         "AutoCast": {
           "Enabled": true,
-          "RequiresEnemyTarget": false
+          "TargetRule": "Self"
         }
       },
       {

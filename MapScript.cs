@@ -16,7 +16,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
-	private const string BlueprintTemplateId = "unit/blueprint";
+	private const string ConstructionSiteTemplateId = "building/construction_site";
+	private const string ReservationNoteKey = "state.note";
 	private const string WorkerTemplateId = "unit/worker";
 	private const float BuildingWoodCost = 100f;
 	private const int ManaPerProduction = 100;
@@ -27,6 +28,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const int MaximumPopulation = 8;
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
+	// A site is raised before the deck's package is locked, so the site has to state how much work it needs before the
+	// building it becomes is known. Every package takes the same time to raise once it is known, and the work a player
+	// has already put into the site is carried over rather than paid again.
+	private const float SiteConstructionSeconds = 30f;
+	// A site that has not been committed to a building is held one percent short of completion, so a site can stand nearly
+	// raised for as long as its owner is undecided and can never finish as a building nobody chose.
+	private const float SiteHeldFinishedFraction = 0.99f;
 	private const float UnderAttackAlertCooldownSeconds = 8f;
 	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
@@ -84,21 +92,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float TargetRetrySeconds = 0.6f;
 	private const int FormationFrontSize = 3;
 	private const int FormationFlankSize = 2;
-
-	private const string MendAbilityId = "ability/mend";
-	private const string WardingAegisAbilityId = "ability/warding_aegis";
-	private const string StandardAuraAbilityId = "ability/standard_aura";
-	private const string StandardAuraBuffId = "buff/standard_aura";
-	private const string MenderTemplateId = "unit/mender";
-	private const string WarderTemplateId = "unit/warder";
-	private const string StandardBearerTemplateId = "unit/standard_bearer";
-	private const float MendRadius = 8f;
-	private const float MendCooldownSeconds = 2.2f;
-	private const float MendHealthFractionBelow = 0.9f;
-	private const float WardingAegisRadius = 8f;
-	private const float WardingAegisCooldownSeconds = 12f;
-	private const float StandardAuraRadius = 7f;
-	private const float StandardAuraCooldownSeconds = 5f;
 
 	private enum SoldierFormation
 	{
@@ -217,10 +210,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly byte[] _draftOpen = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptionCounts = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftOptions = new int[EcsSharedMemory.MAX_PLAYERS * MaximumDraftOptions];
+	private readonly string[] _reservedNames = new string[MaximumDraftOptions];
 	private readonly int[] _draftSiteEntities = new int[EcsSharedMemory.MAX_PLAYERS];
 	private readonly int[] _draftSiteRetirements = new int[EcsSharedMemory.MAX_PLAYERS];
-	private readonly float[] _draftSitePositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
-	private readonly float[] _draftSitePositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
 	private int _deckTakenBuildings;
 
 	// The parameters the lobby's host set for this match. Each one starts at the value the ruleset itself states and is
@@ -266,9 +258,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly float[] _cinderfieldCentersZ = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _cinderfieldRemainingSeconds = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _cinderfieldDamageTimers = new float[EcsSharedMemory.MAX_PLAYERS];
-	private readonly float[] _mendTimers = new float[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _wardingAegisTimers = new float[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _standardAuraTimers = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _eliminated = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsX = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly float[] _nexusPositionsZ = new float[EcsSharedMemory.MAX_PLAYERS];
@@ -370,7 +359,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UpdateProduction(api, player);
 			UpdateHeroMemory(api, player);
 			UpdateArmyBehaviour(api, player);
-			ApplyAutoCasts(api, player, delta);
 		}
 
 		MaintainWorkers(api, players, delta);
@@ -427,7 +415,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		player.Wood = StartingWood;
 		player.Stone = 0f;
 		player.MaxPopulation = MaximumPopulation;
-		api.SetPlayerBuildingLimit(playerIndex, _maximumBuildingsPerPlayer + 1);
+		// The engine's own cap is one place looser than this ruleset's, and the site a draft is played on already counts as
+		// a location, so a placement the player cannot afford to hold is answered here in words rather than refused by a
+		// count the player never sees.
+		api.SetPlayerBuildingLimit(playerIndex, _maximumBuildingsPerPlayer + 2);
 
 		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
 		if (spawnAnchor == Vector3.Zero)
@@ -1046,123 +1037,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	/// <summary>
-	///     Casts the soldier abilities the content set gives to an auto-cast rule and no player order: the Mender heals the
-	///     most wounded ally beside it, the Warder shields the weakest one, and the Standard Bearer keeps its aura on the
-	///     soldiers around it. The map keeps each caster's own clock, because these abilities are never triggered by a
-	///     player and the authority has no order to spend a cooldown on.
-	/// </summary>
-	private void ApplyAutoCasts(IGameAPI api, PlayerId player, float delta)
-	{
-		if (delta <= 0f) return;
-
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId caster = owned[index];
-			if (caster.IsDead || caster.IsBuilding || caster.IsHero) continue;
-
-			string templateId = caster.TemplateID;
-			if (templateId == MenderTemplateId)
-			{
-				UpdateMend(api, owned, caster, delta);
-				continue;
-			}
-
-			if (templateId == WarderTemplateId)
-			{
-				UpdateWardingAegis(api, owned, caster, delta);
-				continue;
-			}
-
-			if (templateId == StandardBearerTemplateId) UpdateStandardAura(api, owned, caster, delta);
-		}
-	}
-
-	private void UpdateMend(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
-	{
-		int entityId = caster.UniqueId;
-		_mendTimers[entityId] -= delta;
-		if (_mendTimers[entityId] > 0f) return;
-
-		_mendTimers[entityId] = 0f;
-		if (!TryFindMostWoundedAlly(owned, caster, MendRadius, MendHealthFractionBelow, out UnitId patient)) return;
-
-		_mendTimers[entityId] = MendCooldownSeconds;
-		api.CastAbility(caster, MendAbilityId, patient.Position);
-	}
-
-	private void UpdateWardingAegis(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
-	{
-		int entityId = caster.UniqueId;
-		_wardingAegisTimers[entityId] -= delta;
-		if (_wardingAegisTimers[entityId] > 0f) return;
-
-		_wardingAegisTimers[entityId] = 0f;
-		if (!TryFindMostWoundedAlly(owned, caster, WardingAegisRadius, 1f, out UnitId ward)) return;
-
-		_wardingAegisTimers[entityId] = WardingAegisCooldownSeconds;
-		api.CastAbility(caster, WardingAegisAbilityId, ward.Position);
-	}
-
-	private void UpdateStandardAura(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster, float delta)
-	{
-		int entityId = caster.UniqueId;
-		_standardAuraTimers[entityId] -= delta;
-		if (_standardAuraTimers[entityId] > 0f) return;
-
-		_standardAuraTimers[entityId] = 0f;
-		if (!HasAllyWithoutAura(api, owned, caster)) return;
-
-		_standardAuraTimers[entityId] = StandardAuraCooldownSeconds;
-		api.CastAbility(caster, StandardAuraAbilityId, caster.Position);
-	}
-
-	private static bool TryFindMostWoundedAlly(ReadOnlySpan<UnitId> owned, UnitId caster, float radius, float healthFractionBelow, out UnitId worstWounded)
-	{
-		worstWounded = UnitId.Invalid;
-		Vector3 casterPosition = caster.Position;
-		float radiusSquared = radius * radius;
-		float lowestFraction = healthFractionBelow;
-
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId ally = owned[index];
-			if (ally.IsDead || ally.IsBuilding) continue;
-			if (ally.UniqueId == caster.UniqueId) continue;
-			if (Vector3.DistanceSquared(ally.Position, casterPosition) > radiusSquared) continue;
-
-			float maximumHealth = ally.MaxHealth;
-			if (maximumHealth <= 0f) continue;
-
-			float fraction = ally.Health / maximumHealth;
-			if (fraction >= lowestFraction) continue;
-
-			lowestFraction = fraction;
-			worstWounded = ally;
-		}
-
-		return worstWounded.IsValid;
-	}
-
-	private static bool HasAllyWithoutAura(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId caster)
-	{
-		Vector3 casterPosition = caster.Position;
-		float radiusSquared = StandardAuraRadius * StandardAuraRadius;
-
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId ally = owned[index];
-			if (ally.IsDead || ally.IsBuilding) continue;
-			if (Vector3.DistanceSquared(ally.Position, casterPosition) > radiusSquared) continue;
-			if (api.UnitHasBuff(ally, StandardAuraBuffId)) continue;
-
-			return true;
-		}
-
-		return false;
-	}
-
 	private void RefreshBulwark(IGameAPI api, PlayerId player)
 	{
 		int playerIndex = player.Value;
@@ -1334,9 +1208,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	{
 		if (!building.IsValid) return;
 
-		// A site marker is placed finished, so this is where its draw opens: it is not a building the match built, and
-		// the packages it offers are what says which building rises there.
-		if (string.Equals(building.TemplateID, BlueprintTemplateId, StringComparison.OrdinalIgnoreCase))
+		// A construction site is placed finished, so this is where its draw opens: it is not a building the match raised,
+		// and the package that is locked on it is what says which building rises there.
+		if (string.Equals(building.TemplateID, ConstructionSiteTemplateId, StringComparison.OrdinalIgnoreCase))
 		{
 			BeginConstruction(building);
 			return;
@@ -1617,6 +1491,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UnitId building = owned[index];
 			if (building.IsDead || !building.IsBuilding) continue;
 
+			// Requisition finishes part of a building the player already committed to. A site whose package is not locked is
+			// the player's decision still open, so speeding that work along would spend the ability on nothing.
+			if (string.Equals(building.TemplateID, ConstructionSiteTemplateId, StringComparison.OrdinalIgnoreCase)) continue;
+
 			float progress = _api.GetUnitConstructionProgress(building);
 			if (progress >= 1f) continue;
 
@@ -1722,41 +1600,41 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Opens the draw on the site the player just placed. The site is the blueprint the placement order raised, so the
-	///     ground was chosen from the blueprint's own silhouette rather than from a cast aimed at a point. The packages
-	///     appear in the marker's command grid, so choosing one reads as choosing what to raise on that ground rather than
-	///     as a second cast from the hero that already paid for the site.
+	///     Opens the draw on the site the player just placed. The site is unidentified at this point: it stands where the
+	///     placement order put it, it can be laboured at, and it is held one percent short of completion until a package is
+	///     locked, so nothing can rise there that the player did not choose. The packages appear in the site's command grid,
+	///     and the site itself states what the deck reserved for it, which is how an opponent reads the reservation.
 	/// </summary>
-	/// <param name="blueprint">The site marker the player placed.</param>
-	private void BeginConstruction(UnitId blueprint)
+	/// <param name="site">The uncommitted site the player placed.</param>
+	private void BeginConstruction(UnitId site)
 	{
-		int playerIndex = blueprint.Player;
+		int playerIndex = site.Player;
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		if (!player.IsActive)
 		{
-			RetireUnansweredSite(playerIndex, blueprint);
+			RetireUnansweredSite(playerIndex, site);
 			return;
 		}
 
 		if (_draftOpen[playerIndex] != 0)
 		{
-			RetireUnansweredSite(playerIndex, blueprint);
+			RetireUnansweredSite(playerIndex, site);
 			player.ShowFeedbackText("Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer)
 		{
-			RetireUnansweredSite(playerIndex, blueprint);
+			RetireUnansweredSite(playerIndex, site);
 			player.ShowFeedbackText($"All {_maximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (player.Wood < BuildingWoodCost)
 		{
-			RetireUnansweredSite(playerIndex, blueprint);
+			RetireUnansweredSite(playerIndex, site);
 			player.ShowFeedbackText("A construction costs 100 wood.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
@@ -1764,20 +1642,25 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int optionCount = DrawDraftOptions(playerIndex);
 		if (optionCount == 0)
 		{
-			RetireUnansweredSite(playerIndex, blueprint);
+			RetireUnansweredSite(playerIndex, site);
 			player.ShowFeedbackText("No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
-		_api.SetUnitInvulnerable(blueprint, true);
-		_api.SetUnitCommandsFrozen(blueprint, true);
+		_api.SetUnitInvulnerable(site, true);
+		_api.SetUnitCommandsFrozen(site, true);
+		_api.SetUnitRepairable(site, true);
+
+		// The site needs work before it is identified, and it is held short of completion while the draw is open, so a
+		// player may labour it up to the gate without ever finishing a building they have not chosen.
+		_api.StartUnitConstruction(site, SiteConstructionSeconds);
+		_api.SetUnitConstructionCeiling(site, SiteHeldFinishedFraction);
+
 		player.AdjustWood(-BuildingWoodCost);
 		_draftOpen[playerIndex] = 1;
 		_draftOptionCounts[playerIndex] = optionCount;
-		_draftSiteEntities[playerIndex] = blueprint.UniqueId;
-		Vector3 sitePosition = blueprint.Position;
-		_draftSitePositionsX[playerIndex] = sitePosition.X;
-		_draftSitePositionsZ[playerIndex] = sitePosition.Z;
+		_draftSiteEntities[playerIndex] = site.UniqueId;
+		Vector3 sitePosition = site.Position;
 
 		for (int index = 0; index < optionCount; index++)
 		{
@@ -1785,6 +1668,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			_api.SetAbilityGridPosition(templateId, index, DraftRow);
 		}
 
+		PublishReservation(_api, playerIndex, site, optionCount);
 		ApplyDraftAbilityState(_api, playerIndex);
 
 		player.ShowFeedbackText($"{optionCount} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
@@ -1792,17 +1676,51 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Takes a site marker back that no draw was opened on. The marker is removed on the following update rather than
-	///     while the placement that raised it is still resolving, which is the same reason an answered site retires then.
+	///     Takes a site back that no draw was opened on. The site is removed on the following update rather than while the
+	///     placement that raised it is still resolving.
 	/// </summary>
 	/// <param name="playerIndex">The player whose placement is being refused.</param>
-	/// <param name="blueprint">The site marker to remove.</param>
-	private void RetireUnansweredSite(int playerIndex, UnitId blueprint)
+	/// <param name="site">The site to remove.</param>
+	private void RetireUnansweredSite(int playerIndex, UnitId site)
 	{
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
-		if (!blueprint.IsValid) return;
+		if (!site.IsValid) return;
 
-		_draftSiteRetirements[playerIndex] = blueprint.UniqueId;
+		_draftSiteRetirements[playerIndex] = site.UniqueId;
+	}
+
+	/// <summary>
+	///     States on the site itself which buildings the deck reserved for it, so every player who selects that ground reads
+	///     the same three names its owner is choosing between. The note is cleared the moment a package is locked, because
+	///     the site then states what it is by being that building rather than by listing what it could have been.
+	/// </summary>
+	/// <param name="api">The game API the match runs through.</param>
+	/// <param name="playerIndex">The player holding the draw open.</param>
+	/// <param name="site">The unidentified site the reservation belongs to.</param>
+	/// <param name="optionCount">How many options the draw offered.</param>
+	private void PublishReservation(IGameAPI api, int playerIndex, UnitId site, int optionCount)
+	{
+		if (!site.IsValid || optionCount <= 0) return;
+
+		for (int index = 0; index < optionCount; index++)
+		{
+			string templateId = SoldierProfiles[_draftOptions[playerIndex * MaximumDraftOptions + index]].BuildingTemplateId;
+			_reservedNames[index] = api.GetUnitName(templateId);
+		}
+
+		api.SetUnitTooltipText(site, ReservationNoteKey, $"Reserved: {string.Join(", ", _reservedNames, 0, optionCount)}");
+	}
+
+	/// <summary>
+	///     Clears the reservation a site stated before its package was locked or its draw was abandoned.
+	/// </summary>
+	/// <param name="api">The game API the match runs through.</param>
+	/// <param name="site">The site whose reservation is being cleared.</param>
+	private static void ClearReservation(IGameAPI api, UnitId site)
+	{
+		if (!site.IsValid) return;
+
+		api.SetUnitTooltipText(site, ReservationNoteKey, string.Empty);
 	}
 
 	/// <summary>
@@ -1925,7 +1843,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	/// <summary>
 	///     Declares the abilities the draft is played through. Each drafted building is an ability whose identifier is the
 	///     building template itself, so a cast names the package the player picked without a second table to keep in step,
-	///     and every hero and Nexus can offer them in its command grid. All of them are hidden until a draw offers them.
+	///     and the site that holds the draw offers them. All of them are hidden until a draw offers them.
 	/// </summary>
 	private void RegisterDraftAbilities(IGameAPI api)
 	{
@@ -1938,20 +1856,25 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, one every {profile.ProductionSeconds:0}s. Workers gather {workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s each, gaining {workerProfile.WorkerBuffSummary}. Both draw from the building's own mana.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
-			AddDraftAbilityToBlueprint(api, profile.BuildingTemplateId);
+			AddDraftAbilityToSite(api, profile.BuildingTemplateId);
 			api.SetAbilityTooltip(profile.BuildingTemplateId, tooltip);
 		}
 
 		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
 		api.SetAbilityGridPosition(AbandonConstructionAbilityId, DraftAbandonSlot, DraftRow);
-		AddDraftAbilityToBlueprint(api, AbandonConstructionAbilityId);
+		AddDraftAbilityToSite(api, AbandonConstructionAbilityId);
 	}
 
-	private static void AddDraftAbilityToBlueprint(IGameAPI api, string abilityId)
+	private static void AddDraftAbilityToSite(IGameAPI api, string abilityId)
 	{
-		api.AddUnitTypeAbility(BlueprintTemplateId, abilityId);
+		api.AddUnitTypeAbility(ConstructionSiteTemplateId, abilityId);
 	}
 
+	/// <summary>
+	///     Gives up a site whose draw closed without a package: it is removed on the next update, and its packages stop
+	///     being offered at once so a selection made in that tick cannot still read a draw that is over.
+	/// </summary>
+	/// <param name="playerIndex">The player whose draw is closing without a choice.</param>
 	private void RetireDraftSite(int playerIndex)
 	{
 		int entityId = _draftSiteEntities[playerIndex];
@@ -1960,22 +1883,21 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		_draftSiteRetirements[playerIndex] = entityId;
 
-		// The marker answers the draw, so its packages stop being offered at once even though the marker itself stands
-		// for one more tick: a selection made in that tick must not still read the draw it has already answered.
-		UnitId blueprint = new(entityId);
-		if (blueprint.IsDead) return;
+		UnitId site = new(entityId);
+		if (site.IsDead) return;
 
+		ClearReservation(_api, site);
 		for (int index = 0; index < SoldierProfiles.Length; index++)
 		{
-			_api.SetAbilityState(blueprint, SoldierProfiles[index].BuildingTemplateId, true, true);
+			_api.SetAbilityState(site, SoldierProfiles[index].BuildingTemplateId, true, true);
 		}
 
-		_api.SetAbilityState(blueprint, AbandonConstructionAbilityId, true, true);
+		_api.SetAbilityState(site, AbandonConstructionAbilityId, true, true);
 	}
 
 	/// <summary>
-	///     Removes the markers of sites that were answered last tick. The blueprint is often the caster of the command that
-	///     answered it, so it is retired on the following update rather than while its own ability is still resolving.
+	///     Removes the sites that were given up last tick. A site is the caster of the command that answered it, so it is
+	///     retired on the following update rather than while its own ability is still resolving.
 	/// </summary>
 	private void RetireDraftSites(IGameAPI api)
 	{
@@ -1985,37 +1907,38 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (entityId <= 0) continue;
 
 			_draftSiteRetirements[playerIndex] = 0;
-			UnitId blueprint = new(entityId);
-			if (blueprint.IsDead) continue;
+			UnitId site = new(entityId);
+			if (site.IsDead) continue;
 
-			api.DestroyUnit(blueprint, executeDespawnShader: false, playDeathAnimation: false);
+			api.DestroyUnit(site, executeDespawnShader: false, playDeathAnimation: false);
 		}
 	}
 
 	/// <summary>
-	///     Shows the draft on the units that carry the command grid: the hero that began the construction and the Nexus it
-	///     was begun from. Only the drawn packages and the abandon command are visible, so a player sees the three options
-	///     the deck offered and nothing else.
+	///     Shows the draft on the site that holds it: only the drawn packages and the abandon command are visible, so a
+	///     player sees the options the deck offered and nothing else. The hero that began the construction loses its Begin
+	///     Construction card while the draw is open, because a second site the player cannot commit does not belong on the
+	///     grid beside the choice they still owe this one.
 	/// </summary>
 	private void ApplyDraftAbilityState(IGameAPI api, int playerIndex)
 	{
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 
-		int blueprintEntityId = _draftSiteEntities[playerIndex];
-		UnitId blueprint = new(blueprintEntityId);
-		bool hasBlueprint = blueprintEntityId > 0 && !blueprint.IsDead;
+		int siteEntityId = _draftSiteEntities[playerIndex];
+		UnitId site = new(siteEntityId);
+		bool hasSite = siteEntityId > 0 && !site.IsDead;
 
 		for (int index = 0; index < SoldierProfiles.Length; index++)
 		{
-			if (!hasBlueprint) break;
+			if (!hasSite) break;
 
 			string abilityId = SoldierProfiles[index].BuildingTemplateId;
 			bool visible = IsDraftOption(playerIndex, index);
-			api.SetAbilityState(blueprint, abilityId, !visible, !visible);
+			api.SetAbilityState(site, abilityId, !visible, !visible);
 		}
 
-		bool draftOpen = hasBlueprint && _draftOpen[playerIndex] != 0;
-		if (hasBlueprint) api.SetAbilityState(blueprint, AbandonConstructionAbilityId, !draftOpen, !draftOpen);
+		bool draftOpen = hasSite && _draftOpen[playerIndex] != 0;
+		if (hasSite) api.SetAbilityState(site, AbandonConstructionAbilityId, !draftOpen, !draftOpen);
 
 		// Begin Construction refuses while a draw is open, so leaving its card on the grid spent one of the twelve slots
 		// on a command the player could not use and pushed the last offered package onto a second page.
@@ -2038,8 +1961,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Locks the building a player cast from its command grid. The deck entry leaves the shared deck here rather than
-	///     when it was drawn, so an option the player declined stays available to everybody else.
+	///     Locks the building a player cast from its command grid. The site the draw stands on becomes that building: it
+	///     takes its template, so every screen draws its silhouette from then on, and keeps the work it has been given
+	///     rather than paying for that work twice. The deck entry leaves the shared deck here rather than when it was drawn,
+	///     so an option the player declined stays available to everybody else.
 	/// </summary>
 	private void LockDraftOption(int playerIndex, string buildingTemplateId)
 	{
@@ -2056,23 +1981,34 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		_draftOpen[playerIndex] = 0;
-		_draftOptionCounts[playerIndex] = 0;
-
-		var position = new Vector3(_draftSitePositionsX[playerIndex], 0f, _draftSitePositionsZ[playerIndex]);
-		UnitId site = _api.SpawnBuildingUnderConstruction(buildingTemplateId, position, playerIndex, ConstructionSecondsByProfile[profileIndex]);
-		if (!site.IsValid)
+		UnitId site = new(_draftSiteEntities[playerIndex]);
+		if (!site.IsValid || site.IsDead)
 		{
-			RetireDraftSite(playerIndex);
+			_draftOpen[playerIndex] = 0;
+			_draftOptionCounts[playerIndex] = 0;
+			_draftSiteEntities[playerIndex] = 0;
 			player.AdjustWood(BuildingWoodCost);
-			player.ShowFeedbackText("The site could not be placed there.", new Vector3(1f, 0.3f, 0.25f));
+			player.ShowFeedbackText("The site is gone. Its 100 wood is returned.", new Vector3(1f, 0.3f, 0.25f));
 			ApplyDraftAbilityState(_api, playerIndex);
 			return;
 		}
 
-		_api.SetUnitRepairable(site, true);
+		_draftOpen[playerIndex] = 0;
+		_draftOptionCounts[playerIndex] = 0;
+		_draftSiteEntities[playerIndex] = 0;
+
+		if (!_api.RevealBuildingSite(site, buildingTemplateId, ConstructionSecondsByProfile[profileIndex]))
+		{
+			RetireUnansweredSite(playerIndex, site);
+			player.AdjustWood(BuildingWoodCost);
+			player.ShowFeedbackText("The site could not be raised as that building.", new Vector3(1f, 0.3f, 0.25f));
+			ApplyDraftAbilityState(_api, playerIndex);
+			return;
+		}
+
+		_api.SetUnitConstructionCeiling(site, 1f);
 		_api.SetUnitMana(site, 0f);
-		RetireDraftSite(playerIndex);
+		ClearReservation(_api, site);
 
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
 		// refuse does not cost the deck one of its nine buildings for the rest of the match.
@@ -2127,9 +2063,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_workerPausedOf[entityId] = 0;
 		_burningFromMark[entityId] = 0;
 		_cinderMarkDamage[entityId] = 0f;
-		_mendTimers[entityId] = 0f;
-		_wardingAegisTimers[entityId] = 0f;
-		_standardAuraTimers[entityId] = 0f;
 		_lastBadgeValues[entityId] = -1;
 		_statedManaMax[entityId] = -1;
 		_statedManaRegen[entityId] = -1f;
