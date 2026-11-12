@@ -12,6 +12,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string WoodNodeTemplateId = "resource/melee_woodland";
 
 	private const int DefaultMaximumBuildingsPerPlayer = 5;
+	private const int DefaultMaximumBuildingCopiesPerPlayer = 1;
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
@@ -154,11 +155,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private static readonly string[] RelicEffects =
 	{
 		"Front-formation soldiers gain 10% maximum health.",
-		"Soldier-building recharge is 10% faster.",
+		"All recharge is 10% faster.",
 		"Owned buildings return 25% of the damage they take.",
 		"Workers gain 10% attack.",
-		"All owned units gain 10 Tenacity.",
-		"Soldier-building recharge is 10% faster."
+		"All owned units suffer 10% shorter debuff durations.",
+		"Charge recharge is 10% faster."
 	};
 
 	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
@@ -219,6 +220,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	// The parameters the lobby's host set for this match. Each one starts at the value the ruleset itself states and is
 	// replaced only when the host configured it, so a lobby that touched nothing plays the authored ruleset.
 	private int _maximumBuildingsPerPlayer = DefaultMaximumBuildingsPerPlayer;
+	private int _maximumBuildingCopiesPerPlayer = DefaultMaximumBuildingCopiesPerPlayer;
 	private int _draftOptionsPerDraw = DefaultDraftOptionCount;
 	private float _capacityMultiplier = 1f;
 	private float _chargeMultiplier = 1f;
@@ -644,6 +646,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		int workerId = worker.UniqueId;
 		int buildingId = building.UniqueId;
+		ResetUnitRuntimeState(workerId);
 		_workerBuildingOf[workerId] = buildingId;
 		_workerNodeOf[workerId] = 0;
 		_workerPausedOf[workerId] = 0;
@@ -721,6 +724,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	/// </summary>
 	private void UpdateWorkerProduction(IGameAPI api, PlayerId player, float delta)
 	{
+		// The worker queue is cleared with every other queue when the hero dies, and it stays cleared until the hero is
+		// back. A building that finishes its site while the hero is away therefore does not spend its first worker charge
+		// on a crew nobody is leading.
+		if (_heroEntities[player.Value] <= 0) return;
+
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 		for (int buildingIndex = 0; buildingIndex < owned.Length; buildingIndex++)
 		{
@@ -732,14 +740,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (!IsBuildingOperational(api, building)) continue;
 
 			int buildingId = building.UniqueId;
+			float workerRechargeSeconds = profile.WorkerRechargeSeconds * ResolveWorkerRechargeMultiplier(player.Value);
 
 			if (_workerCharges[buildingId] < profile.WorkerCharges)
 			{
 				_workerChargeProgress[buildingId] += delta;
-				while (_workerChargeProgress[buildingId] >= profile.WorkerRechargeSeconds
+				while (_workerChargeProgress[buildingId] >= workerRechargeSeconds
 				       && _workerCharges[buildingId] < profile.WorkerCharges)
 				{
-					_workerChargeProgress[buildingId] -= profile.WorkerRechargeSeconds;
+					_workerChargeProgress[buildingId] -= workerRechargeSeconds;
 					_workerCharges[buildingId]++;
 				}
 			}
@@ -1074,6 +1083,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			}
 
 			if (unit.IsHero) continue;
+			if (_workerBuildingOf[unit.UniqueId] > 0) continue;
 			if (Vector3.DistanceSquared(unit.Position, hero.Position) <= BulwarkSoldierRadius * BulwarkSoldierRadius) nearbySoldiers++;
 		}
 
@@ -1142,6 +1152,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int constructionOrder = _playerConstructionCount[playerIndex] + 1;
 		_playerConstructionCount[playerIndex] = constructionOrder;
 		_buildingConstructionOrder[buildingId] = constructionOrder;
+		_lastBadgeValues[buildingId] = -1;
 		_workerCharges[buildingId] = 1;
 		_workerChargeProgress[buildingId] = 0f;
 		_workerProductionProgress[buildingId] = 0f;
@@ -1236,11 +1247,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UnitId unit = owned[index];
 			if (unit.IsDead) continue;
 
-			// Every production queue is cleared, including the ones its buildings were working on: an army is raised
-			// for the hero, so a queue that keeps running while the hero is dead would field soldiers nobody follows.
+			// Every production queue is cleared, including the worker crews' queues: the army disperses with the hero, so
+			// a queue that keeps running while the hero is dead would field soldiers nobody follows.
 			_producing[unit.UniqueId] = 0;
 			_productionTimers[unit.UniqueId] = 0f;
+			_workerProducing[unit.UniqueId] = 0;
+			_workerProductionProgress[unit.UniqueId] = 0f;
 			if (unit.IsHero || unit.IsBuilding) continue;
+
+			// Workers are the economy, not the army. They keep working their nodes, and their charges keep refilling, so
+			// a hero's death costs the army it was leading rather than the base that supports it.
+			if (_workerBuildingOf[unit.UniqueId] > 0) continue;
 
 			unit.Destroy(false, false);
 		}
@@ -1628,8 +1645,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int draftOptions = api.GetMatchOption(MatchOption.MaximumBuildingDraftCount);
 		_draftOptionsPerDraw = draftOptions > 0 ? Math.Clamp(draftOptions, 1, MaximumDraftOptions) : DefaultDraftOptionCount;
 
-		int buildingLimit = api.GetMatchOption(MatchOption.MaximumUniqueBuildingInstances);
-		_maximumBuildingsPerPlayer = buildingLimit > 0 ? Math.Clamp(buildingLimit, 1, MaximumBuildingLimit) : DefaultMaximumBuildingsPerPlayer;
+		int buildingSupply = api.GetMatchOption(MatchOption.MaximumBuildingSupply);
+		_maximumBuildingsPerPlayer = buildingSupply > 0 ? Math.Clamp(buildingSupply, 1, MaximumBuildingLimit) : DefaultMaximumBuildingsPerPlayer;
+
+		int buildingCopies = api.GetMatchOption(MatchOption.MaximumUniqueBuildingInstances);
+		_maximumBuildingCopiesPerPlayer = buildingCopies > 0 ? Math.Clamp(buildingCopies, 1, MaximumBuildingLimit) : DefaultMaximumBuildingCopiesPerPlayer;
 
 		int capacityPercent = api.GetMatchOption(MatchOption.CapacityMultiplierPercent);
 		_capacityMultiplier = capacityPercent > 0 ? capacityPercent / 100f : 1f;
@@ -1709,7 +1729,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		for (int profileIndex = 0; profileIndex < SoldierProfiles.Length; profileIndex++)
 		{
 			if ((_deckTakenBuildings & (1 << profileIndex)) != 0) continue;
-			if (PlayerOwnsBuilding(owned, SoldierProfiles[profileIndex].BuildingTemplateId)) continue;
+			if (CountOwnedBuildings(owned, SoldierProfiles[profileIndex].BuildingTemplateId) >= _maximumBuildingCopiesPerPlayer) continue;
 
 			destination[count++] = profileIndex;
 		}
@@ -1717,16 +1737,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		return count;
 	}
 
-	private static bool PlayerOwnsBuilding(ReadOnlySpan<UnitId> owned, string templateId)
+	private static int CountOwnedBuildings(ReadOnlySpan<UnitId> owned, string templateId)
 	{
+		int count = 0;
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId unit = owned[index];
 			if (unit.IsDead || !unit.IsBuilding) continue;
-			if (unit.TemplateID == templateId) return true;
+			if (unit.TemplateID == templateId) count++;
 		}
 
-		return false;
+		return count;
 	}
 
 	/// <summary>
@@ -1925,6 +1946,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_nextFormationOrderTimes[entityId] = 0f;
 		_soldierControlled[entityId] = 0;
 		_sourceBuildings[entityId] = 0;
+		_workerBuildingOf[entityId] = 0;
+		_workerNodeOf[entityId] = 0;
+		_workerResourceOf[entityId] = 0;
+		_workerPausedOf[entityId] = 0;
+		_burningFromMark[entityId] = 0;
+		_cinderMarkDamage[entityId] = 0f;
+		_mendTimers[entityId] = 0f;
+		_wardingAegisTimers[entityId] = 0f;
+		_standardAuraTimers[entityId] = 0f;
+		_lastBadgeValues[entityId] = -1;
 	}
 
 	/// <summary>
@@ -2431,6 +2462,18 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if ((flags & (1 << 5)) != 0) multiplier *= 0.9f;
 
 		return multiplier;
+	}
+
+	/// <summary>
+	///     Answers how fast a building's worker charges come back. The Courier's Knot shortens every recharge, so it
+	///     applies here as well as to the soldier charges; the Muster Bell states charge recharge and therefore does not
+	///     touch the worker crew's own clock.
+	/// </summary>
+	/// <param name="playerIndex">The seat the building belongs to.</param>
+	/// <returns>The multiplier applied to the authored worker recharge.</returns>
+	private float ResolveWorkerRechargeMultiplier(int playerIndex)
+	{
+		return HasRelic(playerIndex, 1) ? 0.9f : 1f;
 	}
 
 	private static float ResolveConstructionSeconds(string templateId)

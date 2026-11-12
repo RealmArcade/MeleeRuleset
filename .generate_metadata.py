@@ -154,7 +154,7 @@ ABILITIES = [
     },
     {
         "TemplateID": "ability/begin_construction", "Name": "Begin Construction", "AbilityType": "target_spell",
-        "Description": "Costs 100 wood. Draws up to three buildings from the shared deck and starts the one you lock at the target location.",
+        "Description": "Costs 100 wood. Draws up to three buildings from the shared deck; pick one to raise its site here, then right-click the site to build it.",
         "ManaCost": 0, "Cooldown": 0, "TargetRange": 8, "GridX": 3, "GridY": 0, "Hotkey": "B",
     },
 ]
@@ -163,7 +163,7 @@ RELICS = [
     ("item/sigil_of_the_wall", "Sigil of the Wall", "Front-formation soldiers gain 10% maximum health."),
     ("item/couriers_knot", "Courier's Knot", "All recharge is 10% faster."),
     ("item/spiked_barricades", "Spiked Barricades", "All owned buildings return damage to their attackers."),
-    ("item/deep_granaries", "Deep Granaries", "Passive income is 10% higher."),
+    ("item/deep_granaries", "Deep Granaries", "Workers gain 10% attack, so their gathering swings harder."),
     ("item/wardens_writ", "Warden's Writ", "All owned units suffer 10% shorter debuff durations."),
     ("item/muster_bell", "Muster Bell", "Charge recharge is 10% faster."),
 ]
@@ -361,7 +361,7 @@ metadata = {
         "MapDescription": "The melee ruleset: one hero, buildings that raise an army from their charges, relics bought at the Nexus, and a Nexus to break. Terrain and models are composed from a sub-archive.",
         "Author": "Realm",
         "SuggestedPlayers": "2-4",
-        "ShroudType": "None",
+        "ShroudType": "Revealed",
         "MapWidth": 128,
         "MapHeight": 128,
         "CameraBoundsLeft": -95,
