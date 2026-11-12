@@ -1,9 +1,9 @@
-{
+﻿{
   "license": "https://www.realm-game.com/RealmPlatform_UGC_License_v1.txt",
   "GameBuildNumber": "v0.0.6",
   "MapProperties": {
     "MapName": "Melee Ruleset",
-    "MapDescription": "The melee ruleset: one hero, buildings that raise an army from their charges, relics bought at the Nexus, and a Nexus to break. Terrain and models are composed from a sub-archive.",
+    "MapDescription": "The melee ruleset: one hero, buildings that raise an army from their mana, relics bought at the Nexus, and a Nexus to break. Terrain and models are composed from a sub-archive.",
     "Author": "Realm",
     "SuggestedPlayers": "2-4",
     "ShroudType": "Revealed",
@@ -24,7 +24,7 @@
     "ShowUnitManaBar": true,
     "ShowUnitLevel": true,
     "HowToPlayObjective": "Destroy the enemy Nexus.",
-    "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck and shows them in the command grid of your hero and Nexus: pick one for 100 wood and it produces soldiers automatically from its charges, with every soldier matching your hero's level. Spend gold at your Nexus on relics."
+    "HowToPlayInstructions": "Your hero is the only unit you command. Begin Construction draws three buildings from the shared deck and shows them in the command grid of your hero and Nexus: pick one for 100 wood and it produces soldiers automatically from its mana, with every soldier matching your hero's level. Spend gold at your Nexus on relics."
   },
   "Dependencies": [],
   "Templates": {
@@ -82,7 +82,8 @@
           "ability/hold_fast",
           "ability/shield_bash",
           "ability/begin_construction",
-          "ability/innate_unbroken"
+          "ability/innate_unbroken",
+          "ability/gather"
         ],
         "IsHero": true
       },
@@ -139,14 +140,15 @@
           "ability/cinderfield",
           "ability/backdraft",
           "ability/begin_construction",
-          "ability/innate_cinder_mark"
+          "ability/innate_cinder_mark",
+          "ability/gather"
         ],
         "IsHero": true
       },
       {
         "TemplateID": "hero/corvus",
         "Name": "Corvus, the Quartermaster",
-        "Description": "Economy and tempo strategist. Innate Standing Ledger: every owned soldier-granting building holds one more charge, always active.",
+        "Description": "Economy and tempo strategist. Innate Standing Ledger: every owned soldier-granting building stores one more production worth of mana, always active.",
         "MaxHp": 800,
         "Damage": 24,
         "Range": 9.0,
@@ -196,7 +198,8 @@
           "ability/forced_march",
           "ability/emergency_levy",
           "ability/begin_construction",
-          "ability/innate_standing_ledger"
+          "ability/innate_standing_ledger",
+          "ability/gather"
         ],
         "IsHero": true
       },
@@ -728,7 +731,9 @@
         "YOffset": 0,
         "CollisionCircle": 0.35,
         "PathingType": 9,
-        "Abilities": null,
+        "Abilities": [
+          "ability/gather"
+        ],
         "IsHero": false
       }
     ],
@@ -778,7 +783,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -793,9 +798,14 @@
         "YOffset": 1.8015,
         "CollisionCircle": 1.4,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_shieldbearer",
+          "ability/raise_worker_bulwark_hall"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 400.0,
+        "ManaRegen": 6.7677
       },
       {
         "TemplateID": "building/warband_yard",
@@ -806,7 +816,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -821,9 +831,14 @@
         "YOffset": 1.5001,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_axeman",
+          "ability/raise_worker_warband_yard"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 500.0,
+        "ManaRegen": 8.3333
       },
       {
         "TemplateID": "building/spear_lodge",
@@ -834,7 +849,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -849,9 +864,14 @@
         "YOffset": 1.5005,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_spear_militia",
+          "ability/raise_worker_spear_lodge"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 400.0,
+        "ManaRegen": 7.0238
       },
       {
         "TemplateID": "building/archery_range",
@@ -862,7 +882,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -877,9 +897,14 @@
         "YOffset": 1.4952,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_bowman",
+          "ability/raise_worker_archery_range"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 600.0,
+        "ManaRegen": 9.5556
       },
       {
         "TemplateID": "building/bolt_foundry",
@@ -890,7 +915,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -905,9 +930,14 @@
         "YOffset": 1.5023,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_bolt_thrower",
+          "ability/raise_worker_bolt_foundry"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 200.0,
+        "ManaRegen": 5.3333
       },
       {
         "TemplateID": "building/sling_camp",
@@ -918,7 +948,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 30,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -933,9 +963,14 @@
         "YOffset": 1.5106,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_slinger",
+          "ability/raise_worker_sling_camp"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 700.0,
+        "ManaRegen": 11.25
       },
       {
         "TemplateID": "building/mender_shrine",
@@ -946,7 +981,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 35,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -961,9 +996,14 @@
         "YOffset": 1.5024,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_mender",
+          "ability/raise_worker_mender_shrine"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 300.0,
+        "ManaRegen": 6.3462
       },
       {
         "TemplateID": "building/signal_post",
@@ -974,7 +1014,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 35,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -989,9 +1029,14 @@
         "YOffset": 1.3505,
         "CollisionCircle": 1.0,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_standard_bearer",
+          "ability/raise_worker_signal_post"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 300.0,
+        "ManaRegen": 6.9048
       },
       {
         "TemplateID": "building/vigil_bastion",
@@ -1002,7 +1047,7 @@
         "CostGold": 0,
         "CostWood": 100,
         "CostStone": 0,
-        "PopCost": 2,
+        "PopCost": 1,
         "ProductionTime": 35,
         "HpRegen": 0,
         "DamageType": "physical",
@@ -1017,9 +1062,14 @@
         "YOffset": 1.5001,
         "CollisionCircle": 1.25,
         "PathingType": 32,
-        "Abilities": null,
+        "Abilities": [
+          "ability/raise_warder",
+          "ability/raise_worker_vigil_bastion"
+        ],
         "IsHero": false,
-        "ConstructionRange": 4.0
+        "ConstructionRange": 4.0,
+        "MaxMana": 300.0,
+        "ManaRegen": 6.7033
       }
     ],
     "Resources": [
@@ -1106,7 +1156,7 @@
         "Name": "Standing Ledger",
         "AbilityType": "passive",
         "Role": "Innate",
-        "Description": "Every owned soldier-granting building holds one more charge. Always active; never cast or toggled.",
+        "Description": "Every owned soldier-granting building stores one more production worth of mana. Always active; never cast or toggled.",
         "IconPath": "res://Assets/UI/scroll_icon.webp",
         "GridX": 0,
         "GridY": 1
@@ -1333,7 +1383,7 @@
         "TemplateID": "ability/emergency_levy",
         "Name": "Emergency Levy",
         "AbilityType": "instant_spell",
-        "Description": "Every owned soldier-granting building gains one charge, up to its maximum.",
+        "Description": "Every owned soldier-granting building gains one production worth of mana, up to its maximum.",
         "ManaCost": 90,
         "Cooldown": 50,
         "TargetRange": 0,
@@ -1350,11 +1400,6 @@
         "Cooldown": 2.2,
         "TargetRange": 8,
         "AreaOfEffectRadius": 0,
-        "AutoCast": {
-          "Enabled": true,
-          "RequiresEnemyTarget": false,
-          "AllyHealthPercentBelow": 0.9
-        },
         "Effects": [
           {
             "Kind": "heal",
@@ -1373,11 +1418,6 @@
         "Cooldown": 12,
         "TargetRange": 8,
         "AreaOfEffectRadius": 0,
-        "AutoCast": {
-          "Enabled": true,
-          "RequiresEnemyTarget": false,
-          "AllyHealthPercentBelow": 1.0
-        },
         "Effects": [
           {
             "Kind": "shield",
@@ -1397,11 +1437,6 @@
         "Cooldown": 5,
         "TargetRange": 7,
         "AreaOfEffectRadius": 7,
-        "AutoCast": {
-          "Enabled": true,
-          "RequiresEnemyTarget": false,
-          "AllyHealthPercentBelow": 1.0
-        },
         "Effects": [
           {
             "Kind": "buff",
@@ -1423,6 +1458,338 @@
         "TargetRange": 8,
         "GridX": 3,
         "GridY": 0
+      },
+      {
+        "TemplateID": "ability/raise_shieldbearer",
+        "Name": "Raise Shieldbearer",
+        "Description": "Fields one Shieldbearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 5.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_bulwark_hall",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 12.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_axeman",
+        "Name": "Raise Axeman",
+        "Description": "Fields one Axeman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 4.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_warband_yard",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 8.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_spear_militia",
+        "Name": "Raise Spear Militia",
+        "Description": "Fields one Spear Militia beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 5.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_spear_lodge",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 10.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_bowman",
+        "Name": "Raise Bowman",
+        "Description": "Fields one Bowman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 4.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_archery_range",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 7.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_slinger",
+        "Name": "Raise Slinger",
+        "Description": "Fields one Slinger beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 3.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_sling_camp",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 6.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_bolt_thrower",
+        "Name": "Raise Bolt Thrower",
+        "Description": "Fields one Bolt Thrower beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 8.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_bolt_foundry",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 14.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_mender",
+        "Name": "Raise Mender",
+        "Description": "Fields one Mender beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 5.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_mender_shrine",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 12.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_standard_bearer",
+        "Name": "Raise Standard Bearer",
+        "Description": "Fields one Standard Bearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 5.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_signal_post",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 9.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/raise_warder",
+        "Name": "Raise Warder",
+        "Description": "Fields one Warder beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 6.0,
+        "TargetRange": 0.0,
+        "GridX": 0,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false,
+          "ManaReserve": 100.0
+        }
+      },
+      {
+        "TemplateID": "ability/raise_worker_vigil_bastion",
+        "Name": "Raise Worker",
+        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "AbilityType": "instant_spell",
+        "Role": "Production",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "ManaCost": 100.0,
+        "Cooldown": 10.0,
+        "TargetRange": 0.0,
+        "GridX": 1,
+        "GridY": 0,
+        "AutoCast": {
+          "Enabled": true,
+          "RequiresEnemyTarget": false
+        }
+      },
+      {
+        "TemplateID": "ability/gather",
+        "Name": "Gather",
+        "Description": "Sends this unit to work the nearest tree or gold mine. A worker keeps gathering on its own; a hero only gathers when given this order.",
+        "AbilityType": "target_spell",
+        "Role": "Economy",
+        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "TargetRange": 6.0,
+        "GridX": 3,
+        "GridY": 1,
+        "Effects": [
+          {
+            "Kind": "Gather",
+            "Radius": 3.0
+          }
+        ]
       }
     ],
     "Upgrades": [],
@@ -1470,7 +1837,7 @@
       {
         "TemplateID": "item/couriers_knot",
         "Name": "Courier's Knot",
-        "Description": "All recharge is 10% faster.",
+        "Description": "All production cooldowns are 10% shorter.",
         "ItemClass": "relic",
         "CostGold": 100,
         "ChargeCount": 1,
@@ -1518,7 +1885,7 @@
       {
         "TemplateID": "item/muster_bell",
         "Name": "Muster Bell",
-        "Description": "Charge recharge is 10% faster.",
+        "Description": "Soldier production cooldown is 10% shorter.",
         "ItemClass": "relic",
         "CostGold": 100,
         "ChargeCount": 1,

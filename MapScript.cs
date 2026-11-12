@@ -1,4 +1,4 @@
-namespace Realm.Maps;
+﻿namespace Realm.Maps;
 
 using System;
 using System.Numerics;
@@ -11,7 +11,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string GoldNodeTemplateId = "resource/melee_gold_mine";
 	private const string WoodNodeTemplateId = "resource/melee_woodland";
 
-	private const int DefaultMaximumBuildingsPerPlayer = 5;
+	private const int DefaultMaximumBuildingsPerPlayer = 8;
 	private const int DefaultMaximumBuildingCopiesPerPlayer = 1;
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
@@ -19,11 +19,12 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string BlueprintTemplateId = "unit/blueprint";
 	private const string WorkerTemplateId = "unit/worker";
 	private const float BuildingWoodCost = 100f;
+	private const int ManaPerProduction = 100;
 	private const int DefaultDraftOptionCount = 3;
 	private const int MaximumDraftOptions = 24;
 	private const int DraftRow = 2;
 	private const int DraftAbandonSlot = 3;
-	private const int MaximumPopulation = 40;
+	private const int MaximumPopulation = 8;
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
 	private const float UnderAttackAlertCooldownSeconds = 8f;
@@ -113,8 +114,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		string SoldierTemplateId,
 		string BuildingTemplateId,
 		int Capacity,
-		int MaximumCharges,
-		float RechargeSeconds,
+		int StoredProductions,
 		float ProductionSeconds,
 		float AcquisitionRange,
 		SoldierFormation Formation,
@@ -122,9 +122,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private readonly record struct BuildingProfile(
 		string TemplateId,
+		string SoldierAbilityId,
+		string WorkerAbilityId,
+		float ProductionSeconds,
 		int WorkerCapacity,
-		int WorkerCharges,
-		float WorkerRechargeSeconds,
+		int WorkerProductions,
 		float WorkerProductionSeconds,
 		string WorkerResourceType,
 		string[] WorkerBuffIds,
@@ -159,22 +161,22 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"Owned buildings return 25% of the damage they take.",
 		"Workers gain 10% attack.",
 		"All owned units suffer 10% shorter debuff durations.",
-		"Charge recharge is 10% faster."
+		"Soldier recharge is 10% faster."
 	};
 
 	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
 
 	private static readonly SoldierProfile[] SoldierProfiles =
 	{
-		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 5f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard),
-		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 4f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 5f, 12f, SoldierFormation.Front, SoldierTargetingRule.TankShredder),
-		new("unit/bowman", "building/archery_range", 8, 4, 18f, 4f, 12f, SoldierFormation.Back, SoldierTargetingRule.Assassin),
-		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 3f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 8f, 14f, SoldierFormation.Back, SoldierTargetingRule.TankShredder),
-		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 5f, 12f, SoldierFormation.Back, SoldierTargetingRule.Standard),
-		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 5f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
-		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 6f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard)
+		new("unit/shieldbearer", "building/bulwark_hall", 6, 3, 22f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard),
+		new("unit/axeman", "building/warband_yard", 6, 3, 20f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/spear_militia", "building/spear_lodge", 5, 3, 24f, 12f, SoldierFormation.Front, SoldierTargetingRule.TankShredder),
+		new("unit/bowman", "building/archery_range", 8, 4, 18f, 12f, SoldierFormation.Back, SoldierTargetingRule.Assassin),
+		new("unit/slinger", "building/sling_camp", 8, 4, 16f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/bolt_thrower", "building/bolt_foundry", 2, 1, 30f, 14f, SoldierFormation.Back, SoldierTargetingRule.TankShredder),
+		new("unit/mender", "building/mender_shrine", 4, 2, 26f, 12f, SoldierFormation.Back, SoldierTargetingRule.Standard),
+		new("unit/standard_bearer", "building/signal_post", 3, 2, 28f, 12f, SoldierFormation.Flank, SoldierTargetingRule.Standard),
+		new("unit/warder", "building/vigil_bastion", 3, 2, 26f, 12f, SoldierFormation.Front, SoldierTargetingRule.Standard)
 	};
 
 	private static readonly string[] HallWorkerBuffs = { WorkerHallBuffId };
@@ -189,20 +191,20 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private static readonly BuildingProfile[] BuildingProfiles =
 	{
-		new("building/bulwark_hall", 2, 1, 45f, 12f, "gold", HallWorkerBuffs, "+2 armor, +5% health"),
-		new("building/warband_yard", 2, 2, 30f, 8f, "gold", YardWorkerBuffs, "+20% attack"),
-		new("building/spear_lodge", 2, 1, 35f, 10f, "gold", LodgeWorkerBuffs, "+10% move speed"),
-		new("building/archery_range", 3, 2, 25f, 7f, "wood", RangeWorkerBuffs, "+15% attack"),
-		new("building/bolt_foundry", 1, 1, 50f, 14f, "wood", FoundryWorkerBuffs, "+40% attack, -10% move speed"),
-		new("building/sling_camp", 3, 3, 20f, 6f, "wood", SlingWorkerBuffs, "+10% attack"),
-		new("building/mender_shrine", 1, 1, 40f, 12f, "gold", ShrineWorkerBuffs, "+1 armor, +15% move speed"),
-		new("building/signal_post", 2, 1, 30f, 9f, "gold", SignalWorkerBuffs, "+25% attack"),
-		new("building/vigil_bastion", 2, 1, 35f, 10f, "gold", BastionWorkerBuffs, "+2 armor, +10% health")
+		new("building/bulwark_hall", "ability/raise_shieldbearer", "ability/raise_worker_bulwark_hall", 22f, 2, 1, 45f, "gold", HallWorkerBuffs, "+2 armor, +5% health"),
+		new("building/warband_yard", "ability/raise_axeman", "ability/raise_worker_warband_yard", 20f, 2, 2, 30f, "gold", YardWorkerBuffs, "+20% attack"),
+		new("building/spear_lodge", "ability/raise_spear_militia", "ability/raise_worker_spear_lodge", 24f, 2, 1, 35f, "gold", LodgeWorkerBuffs, "+10% move speed"),
+		new("building/archery_range", "ability/raise_bowman", "ability/raise_worker_archery_range", 18f, 3, 2, 25f, "wood", RangeWorkerBuffs, "+15% attack"),
+		new("building/bolt_foundry", "ability/raise_bolt_thrower", "ability/raise_worker_bolt_foundry", 30f, 1, 1, 50f, "wood", FoundryWorkerBuffs, "+40% attack, -10% move speed"),
+		new("building/sling_camp", "ability/raise_slinger", "ability/raise_worker_sling_camp", 16f, 3, 3, 20f, "wood", SlingWorkerBuffs, "+10% attack"),
+		new("building/mender_shrine", "ability/raise_mender", "ability/raise_worker_mender_shrine", 26f, 1, 1, 40f, "gold", ShrineWorkerBuffs, "+1 armor, +15% move speed"),
+		new("building/signal_post", "ability/raise_standard_bearer", "ability/raise_worker_signal_post", 28f, 2, 1, 30f, "gold", SignalWorkerBuffs, "+25% attack"),
+		new("building/vigil_bastion", "ability/raise_warder", "ability/raise_worker_vigil_bastion", 26f, 2, 1, 35f, "gold", BastionWorkerBuffs, "+2 armor, +10% health")
 	};
 
-	private readonly float[] _productionTimers = new float[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _statedManaMax = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly float[] _statedManaRegen = new float[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _lastBadgeValues = new int[EcsSharedMemory.MAX_ENTITIES];
-	private readonly byte[] _producing = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _soldierCounts = new int[SoldierProfiles.Length];
 	private readonly int[] _capacityCounts = new int[SoldierProfiles.Length];
 
@@ -223,7 +225,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private int _maximumBuildingCopiesPerPlayer = DefaultMaximumBuildingCopiesPerPlayer;
 	private int _draftOptionsPerDraw = DefaultDraftOptionCount;
 	private float _capacityMultiplier = 1f;
-	private float _chargeMultiplier = 1f;
+	private float _rechargeMultiplier = 1f;
 	private bool _mirroredDraft;
 	private bool _openPoolDrafting;
 
@@ -269,10 +271,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly int[] _workerNodeOf = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _workerResourceOf = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly byte[] _workerPausedOf = new byte[EcsSharedMemory.MAX_ENTITIES];
-	private readonly int[] _workerCharges = new int[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _workerChargeProgress = new float[EcsSharedMemory.MAX_ENTITIES];
-	private readonly float[] _workerProductionProgress = new float[EcsSharedMemory.MAX_ENTITIES];
-	private readonly byte[] _workerProducing = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _buildingConstructionOrder = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _playerConstructionCount = new int[EcsSharedMemory.MAX_PLAYERS];
 	private float _workerCheckTimer;
@@ -328,6 +326,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		RegisterDraftAbilities(api);
 		RegisterRelicVendor(api);
 		InitializeDamageAffinity(api);
+		RegisterInstructions(api);
 		WarnWhenTheBoardIsNotAuthoredForMelee(api);
 
 		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
@@ -361,8 +360,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 			UpdateArmyLevel(api, player);
 			UpdateRevival(api, player);
-			UpdateProduction(api, player, delta);
-			UpdateWorkerProduction(api, player, delta);
+			UpdateProduction(api, player);
 			UpdateHeroMemory(api, player);
 			UpdateArmyBehaviour(api, player);
 			ApplyAutoCasts(api, player, delta);
@@ -512,7 +510,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		RestoreRelicsToHero(api, playerIndex, hero);
 		ApplyRelicsToUnit(api, playerIndex, hero);
 		ApplyDraftAbilityState(api, playerIndex);
-		RefillChargesForPlayer(api, player);
+		RefillProductionForPlayer(api, player);
 		ResetUnitRuntimeState(hero.UniqueId);
 		ApplyRelicVendorState(api, player);
 
@@ -520,10 +518,15 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		player.ShowFeedbackText("Your hero returns to the field.", new Vector3(0.6f, 1f, 0.7f));
 	}
 
-	private void UpdateProduction(IGameAPI api, PlayerId player, float delta)
+	/// <summary>
+	///     Keeps every building's production honest without raising anything itself: it states the building's mana pool
+	///     from the profile the site was raised with, publishes the casts the building could pay for, and disables the
+	///     two production abilities while what they raise has no room left. The engine's auto-cast is what casts them.
+	/// </summary>
+	private void UpdateProduction(IGameAPI api, PlayerId player)
 	{
 		int playerIndex = player.Value;
-		if (_heroEntities[playerIndex] <= 0) return;
+		bool heroAlive = _heroEntities[playerIndex] > 0 && !new UnitId(_heroEntities[playerIndex]).IsDead;
 
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 
@@ -549,60 +552,162 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (soldierProfile >= 0) _soldierCounts[soldierProfile]++;
 		}
 
-		float rechargeMultiplier = ResolveRechargeMultiplier(playerIndex);
-		int extraCharges = IsStandingLedgerHero(playerIndex) ? 1 : 0;
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId building = owned[index];
+			if (building.IsDead || !building.IsBuilding) continue;
+
+			BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
+
+			if (building.IsDormant || !IsBuildingOperational(api, building))
+			{
+				DisableProduction(api, building, profile);
+				continue;
+			}
+
+			StateBuildingMana(api, playerIndex, building, profile);
+			PublishProductionBadge(api, player, building, AvailableProductions(building));
+
+			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
+			bool soldierRoom = _soldierCounts[profileIndex] < _capacityCounts[profileIndex];
+			bool workerRoom = CountWorkersOfBuilding(owned, building.UniqueId) < profile.WorkerCapacity;
+
+			api.SetAbilityState(building, profile.SoldierAbilityId, disabled: !heroAlive || !soldierRoom, hidden: false);
+			api.SetAbilityState(building, profile.WorkerAbilityId, disabled: !heroAlive || !workerRoom, hidden: false);
+		}
+	}
+
+	private static void DisableProduction(IGameAPI api, UnitId building, BuildingProfile profile)
+	{
+		api.SetAbilityState(building, profile.SoldierAbilityId, true, false);
+		api.SetAbilityState(building, profile.WorkerAbilityId, true, false);
+	}
+
+	/// <summary>
+	///     States the mana pool a building's two production abilities draw from. The pool holds one production worth of mana
+	///     for every production the building's soldier line and worker line would each have held, and it refills at the sum of
+	///     the two lines' own recharge rates, so the same number of soldiers and workers arrive over a match as before.
+	/// </summary>
+	private void StateBuildingMana(IGameAPI api, int playerIndex, UnitId building, BuildingProfile profile)
+	{
+		int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
+		int maximum = MaximumProductionMana(playerIndex, profileIndex, profile);
+		float soldierRecharge = profile.ProductionSeconds * ResolveRechargeMultiplier(playerIndex);
+		float workerRecharge = profile.WorkerProductionSeconds * ResolveWorkerRechargeMultiplier(playerIndex);
+		float regen = (ManaPerProduction / soldierRecharge) + (ManaPerProduction / workerRecharge);
+
+		int entityId = building.UniqueId;
+		if (_statedManaMax[entityId] != maximum)
+		{
+			api.SetUnitMaxMana(building, maximum);
+			_statedManaMax[entityId] = maximum;
+		}
+
+		if (MathF.Abs(_statedManaRegen[entityId] - regen) > 0.0001f)
+		{
+			api.SetUnitManaRegen(building, regen);
+			_statedManaRegen[entityId] = regen;
+		}
+	}
+
+	private int MaximumProductionMana(int playerIndex, int profileIndex, BuildingProfile profile)
+	{
+		int extraProductions = IsStandingLedgerHero(playerIndex) ? 1 : 0;
+		return (ScaledStoredProductions(profileIndex) + extraProductions + profile.WorkerProductions) * ManaPerProduction;
+	}
+
+	private static int AvailableProductions(UnitId building) => (int)MathF.Floor(building.Mana / ManaPerProduction);
+
+	private void RefillProductionForPlayer(IGameAPI api, PlayerId player)
+	{
+		int playerIndex = player.Value;
+		ReadOnlySpan<UnitId> owned = player.GetUnits();
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId building = owned[index];
+			if (building.IsDead || !building.IsBuilding) continue;
+
+			BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
+
+			StateBuildingMana(api, playerIndex, building, profile);
+			api.SetUnitMana(building, MaximumProductionMana(playerIndex, FindProfileIndexByBuilding(building.TemplateID), profile));
+			PublishProductionBadge(api, player, building, AvailableProductions(building));
+		}
+	}
+
+	private void GrantOneProductionToBuildings(int playerIndex)
+	{
+		ReadOnlySpan<UnitId> owned = _api.GetUnitsOwnedByPlayer(playerIndex);
+		PlayerId player = _api.GetPlayer(playerIndex);
 
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId building = owned[index];
 			if (building.IsDead || !building.IsBuilding) continue;
 
-			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
-			if (profileIndex < 0) continue;
+			BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
+			if (!IsBuildingOperational(_api, building)) continue;
 
-			if (building.IsDormant)
-			{
-				_producing[building.UniqueId] = 0;
-				continue;
-			}
-
-			if (!IsBuildingOperational(api, building)) continue;
-
-			SoldierProfile profile = SoldierProfiles[profileIndex];
-			int entityId = building.UniqueId;
-			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
-			float rechargeSeconds = profile.RechargeSeconds * rechargeMultiplier;
-
-			if (building.MaximumCharges != maximumCharges || building.ChargeRechargeSeconds != rechargeSeconds)
-			{
-				api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
-			}
-
-			int charges = building.Charges;
-			PublishChargeBadge(api, player, building, charges);
-
-			int reservedCapacity = _soldierCounts[profileIndex] + (_producing[entityId] != 0 ? 1 : 0);
-			if (_producing[entityId] == 0 && charges > 0 && reservedCapacity < _capacityCounts[profileIndex])
-			{
-				_producing[entityId] = 1;
-				_productionTimers[entityId] = profile.ProductionSeconds;
-			}
-
-			if (_producing[entityId] != 0)
-			{
-				_productionTimers[entityId] -= delta;
-				if (_productionTimers[entityId] <= 0f)
-				{
-					_producing[entityId] = 0;
-					SpawnSoldier(api, player, profile, building);
-					int spent = Math.Max(0, building.Charges - 1);
-					api.SetUnitChargeCount(building, spent);
-					PublishChargeBadge(api, player, building, spent);
-				}
-			}
+			StateBuildingMana(_api, playerIndex, building, profile);
+			_api.SetUnitMana(building, MathF.Min(building.MaxMana, building.Mana + ManaPerProduction));
+			PublishProductionBadge(_api, player, building, AvailableProductions(building));
 		}
 	}
 
+	private int CountWorkersOfBuilding(ReadOnlySpan<UnitId> owned, int buildingId)
+	{
+		int workers = 0;
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId unit = owned[index];
+			if (unit.IsDead) continue;
+			if (_workerBuildingOf[unit.UniqueId] != buildingId) continue;
+
+			workers++;
+		}
+
+		return workers;
+	}
+
+	private bool TryRaiseFromAbility(IGameAPI api, UnitId building, string abilityId)
+	{
+		if (!building.IsValid || !building.IsBuilding) return false;
+
+		BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+		if (string.IsNullOrEmpty(profile.TemplateId)) return false;
+
+		int playerIndex = building.Player;
+		if (playerIndex <= 0) return false;
+
+		PlayerId player = api.GetPlayer(playerIndex);
+		if (!player.IsActive) return false;
+
+		if (string.Equals(abilityId, profile.SoldierAbilityId, StringComparison.OrdinalIgnoreCase))
+		{
+			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
+			if (profileIndex < 0) return true;
+
+			SpawnSoldier(api, player, SoldierProfiles[profileIndex], building);
+			return true;
+		}
+
+		if (string.Equals(abilityId, profile.WorkerAbilityId, StringComparison.OrdinalIgnoreCase))
+		{
+			SpawnWorker(api, player, building, profile);
+			return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	///     Fields one soldier at the building that raised it and sends it walking to the hero, which is the reading a
+	///     player expects: the site is where the soldier comes from, and the army gathers around the hero. The army's own
+	///     formation pass keeps it in its slot once it arrives.
+	/// </summary>
 	private void SpawnSoldier(IGameAPI api, PlayerId player, SoldierProfile profile, UnitId building)
 	{
 		Vector3 origin = building.Position;
@@ -622,7 +727,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (heroEntityId > 0)
 		{
 			UnitId hero = new(heroEntityId);
-			if (!hero.IsDead && hero.Level > 1) api.SetUnitLevel(soldier, hero.Level);
+			if (!hero.IsDead)
+			{
+				if (hero.Level > 1) api.SetUnitLevel(soldier, hero.Level);
+
+				Vector3 rallyPoint = ComputeFormationSlot(profile.Formation, 0, hero.Position, _heroFacing[player.Value]);
+				api.IssueMoveOrder(soldier, rallyPoint);
+			}
 		}
 
 		ApplyInnateToUnit(api, player.Value, soldier);
@@ -714,82 +825,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (string.Equals(resourceType, "wood", StringComparison.OrdinalIgnoreCase)) return 2;
 
 		return 0;
-	}
-
-	/// <summary>
-	///     Raises a building's workers with the same charge algorithm its soldiers use, on the building's own worker
-	///     numbers: a charge is spent when worker capacity is open, the spent charge becomes a worker after the building's
-	///     worker production time, and charges refill on its worker recharge. The worker numbers are separate from the
-	///     soldier numbers, so a package can be strong in one and weak in the other.
-	/// </summary>
-	private void UpdateWorkerProduction(IGameAPI api, PlayerId player, float delta)
-	{
-		// The worker queue is cleared with every other queue when the hero dies, and it stays cleared until the hero is
-		// back. A building that finishes its site while the hero is away therefore does not spend its first worker charge
-		// on a crew nobody is leading.
-		if (_heroEntities[player.Value] <= 0) return;
-
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int buildingIndex = 0; buildingIndex < owned.Length; buildingIndex++)
-		{
-			UnitId building = owned[buildingIndex];
-			if (building.IsDead || !building.IsBuilding) continue;
-
-			BuildingProfile profile = FindBuildingProfile(building.TemplateID);
-			if (string.IsNullOrEmpty(profile.TemplateId)) continue;
-			if (!IsBuildingOperational(api, building)) continue;
-
-			int buildingId = building.UniqueId;
-			float workerRechargeSeconds = profile.WorkerRechargeSeconds * ResolveWorkerRechargeMultiplier(player.Value);
-
-			if (_workerCharges[buildingId] < profile.WorkerCharges)
-			{
-				_workerChargeProgress[buildingId] += delta;
-				while (_workerChargeProgress[buildingId] >= workerRechargeSeconds
-				       && _workerCharges[buildingId] < profile.WorkerCharges)
-				{
-					_workerChargeProgress[buildingId] -= workerRechargeSeconds;
-					_workerCharges[buildingId]++;
-				}
-			}
-			else
-			{
-				_workerChargeProgress[buildingId] = 0f;
-			}
-
-			if (_workerProducing[buildingId] != 0)
-			{
-				_workerProductionProgress[buildingId] += delta;
-				if (_workerProductionProgress[buildingId] < profile.WorkerProductionSeconds) continue;
-
-				_workerProducing[buildingId] = 0;
-				_workerProductionProgress[buildingId] = 0f;
-				SpawnWorker(api, player, building, profile);
-				continue;
-			}
-
-			if (_workerCharges[buildingId] <= 0) continue;
-			if (CountWorkersOfBuilding(owned, buildingId) >= profile.WorkerCapacity) continue;
-
-			_workerCharges[buildingId]--;
-			_workerProducing[buildingId] = 1;
-			_workerProductionProgress[buildingId] = 0f;
-		}
-	}
-
-	private int CountWorkersOfBuilding(ReadOnlySpan<UnitId> owned, int buildingId)
-	{
-		int workers = 0;
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId unit = owned[index];
-			if (unit.IsDead) continue;
-			if (_workerBuildingOf[unit.UniqueId] != buildingId) continue;
-
-			workers++;
-		}
-
-		return workers;
 	}
 
 	private void AssignWorkerToNearestNode(IGameAPI api, int workerId, UnitId building, byte resource)
@@ -1142,10 +1177,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
 		if (profileIndex < 0) return;
 
-		int extraCharges = IsStandingLedgerHero(playerIndex) ? 1 : 0;
-		int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
-		float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
-
 		// The worker every building raises matches the order the building itself was constructed in, so the first
 		// building's workers are first level and the next building's are one level above them.
 		int buildingId = building.UniqueId;
@@ -1153,15 +1184,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_playerConstructionCount[playerIndex] = constructionOrder;
 		_buildingConstructionOrder[buildingId] = constructionOrder;
 		_lastBadgeValues[buildingId] = -1;
-		_workerCharges[buildingId] = 1;
-		_workerChargeProgress[buildingId] = 0f;
-		_workerProductionProgress[buildingId] = 0f;
-		_workerProducing[buildingId] = 0;
+		_statedManaMax[buildingId] = -1;
+		_statedManaRegen[buildingId] = -1f;
 
 		PlayerId player = _api.GetPlayer(playerIndex);
-		_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
-		_api.SetUnitChargeCount(building, ScaledMaximumCharges(profileIndex) > 0 ? 1 : 0);
-		PublishChargeBadge(_api, player, building, building.Charges);
+		BuildingProfile profile = FindBuildingProfile(building.TemplateID);
+		StateBuildingMana(_api, playerIndex, building, profile);
+
+		// A finished site opens with one production already paid for, which is the production the building opens with
+		// with, and the rest of its pool fills at the two lines' recharge.
+		_api.SetUnitMana(building, ManaPerProduction);
+		PublishProductionBadge(_api, player, building, AvailableProductions(building));
 		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
 	}
 
@@ -1247,15 +1280,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			UnitId unit = owned[index];
 			if (unit.IsDead) continue;
 
-			// Every production queue is cleared, including the worker crews' queues: the army disperses with the hero, so
-			// a queue that keeps running while the hero is dead would field soldiers nobody follows.
-			_producing[unit.UniqueId] = 0;
-			_productionTimers[unit.UniqueId] = 0f;
-			_workerProducing[unit.UniqueId] = 0;
-			_workerProductionProgress[unit.UniqueId] = 0f;
+			// Production stops while the hero is dead because the buildings' abilities are disabled, so the army
+			// disperses without the base continuing to field soldiers nobody follows.
 			if (unit.IsHero || unit.IsBuilding) continue;
 
-			// Workers are the economy, not the army. They keep working their nodes, and their charges keep refilling, so
+			// Workers are the economy, not the army. They keep working their nodes, and their productions keep refilling, so
 			// a hero's death costs the army it was leading rather than the base that supports it.
 			if (_workerBuildingOf[unit.UniqueId] > 0) continue;
 
@@ -1363,6 +1392,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int playerIndex = caster.Player;
 		if (playerIndex <= 0) return;
 
+		if (TryRaiseFromAbility(_api, caster, abilityId)) return;
+
 		if (IsRelicAbility(abilityId))
 		{
 			BuyRelic(playerIndex, abilityId);
@@ -1401,7 +1432,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		if (abilityId == "ability/emergency_levy")
 		{
-			GrantOneChargeToBuildings(playerIndex);
+			GrantOneProductionToBuildings(playerIndex);
 		}
 	}
 
@@ -1520,55 +1551,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	private void GrantOneChargeToBuildings(int playerIndex)
-	{
-		ReadOnlySpan<UnitId> owned = _api.GetUnitsOwnedByPlayer(playerIndex);
-		PlayerId player = _api.GetPlayer(playerIndex);
-		int extraCharges = IsStandingLedgerHero(playerIndex) ? 1 : 0;
-
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId building = owned[index];
-			if (building.IsDead || !building.IsBuilding) continue;
-
-			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
-			if (profileIndex < 0) continue;
-			if (!IsBuildingOperational(_api, building)) continue;
-
-			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
-			float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
-			if (building.MaximumCharges != maximumCharges || building.ChargeRechargeSeconds != rechargeSeconds)
-			{
-				_api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
-			}
-
-			_api.SetUnitChargeCount(building, Math.Min(maximumCharges, building.Charges + 1));
-			PublishChargeBadge(_api, player, building, building.Charges);
-		}
-	}
-
-	private void RefillChargesForPlayer(IGameAPI api, PlayerId player)
-	{
-		int playerIndex = player.Value;
-		int extraCharges = IsStandingLedgerHero(playerIndex) ? 1 : 0;
-
-		ReadOnlySpan<UnitId> owned = player.GetUnits();
-		for (int index = 0; index < owned.Length; index++)
-		{
-			UnitId building = owned[index];
-			if (building.IsDead || !building.IsBuilding) continue;
-
-			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
-			if (profileIndex < 0) continue;
-
-			int maximumCharges = ScaledMaximumCharges(profileIndex) + extraCharges;
-			float rechargeSeconds = SoldierProfiles[profileIndex].RechargeSeconds * ResolveRechargeMultiplier(playerIndex);
-			api.SetUnitCharges(building, maximumCharges, rechargeSeconds);
-			api.SetUnitChargeCount(building, maximumCharges);
-			PublishChargeBadge(api, player, building, building.Charges);
-		}
-	}
-
 	private void BeginConstruction(int playerIndex, Vector3 position)
 	{
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
@@ -1635,7 +1617,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	/// <summary>
 	///     Reads the parameters the lobby's host configured for this match, so a host can seat more players, offer more or
-	///     fewer building options per draw, allow more copies of one building, multiply capacity and charges, and switch on
+	///     fewer building options per draw, allow more copies of one building, multiply capacity and stored productions, and switch on
 	///     mirrored drafting or an open building pool. Every one of them falls back to the value this ruleset states, which
 	///     is what a lobby that touched nothing plays.
 	/// </summary>
@@ -1654,8 +1636,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int capacityPercent = api.GetMatchOption(MatchOption.CapacityMultiplierPercent);
 		_capacityMultiplier = capacityPercent > 0 ? capacityPercent / 100f : 1f;
 
-		int chargePercent = api.GetMatchOption(MatchOption.ChargeMultiplierPercent);
-		_chargeMultiplier = chargePercent > 0 ? chargePercent / 100f : 1f;
+		int productionPercent = api.GetMatchOption(MatchOption.ProductionMultiplierPercent);
+		_rechargeMultiplier = productionPercent > 0 ? productionPercent / 100f : 1f;
 
 		_mirroredDraft = api.GetMatchOption(MatchOption.MirroredAutoDraft) != 0;
 		_openPoolDrafting = api.GetMatchOption(MatchOption.OpenPoolDrafting) != 0;
@@ -1676,16 +1658,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Answers how many charges a building of one profile holds, after the host's charge multiplier has been applied.
+	///     Answers how many productions a building of one profile stores, after the host's production multiplier has been applied.
 	/// </summary>
 	/// <param name="profileIndex">The index of the soldier profile in <see cref="SoldierProfiles" />.</param>
-	/// <returns>The maximum charges one building of that profile holds.</returns>
-	private int ScaledMaximumCharges(int profileIndex)
+	/// <returns>The productions one building of that profile stores.</returns>
+	private int ScaledStoredProductions(int profileIndex)
 	{
-		int charges = SoldierProfiles[profileIndex].MaximumCharges;
-		if (_chargeMultiplier == 1f) return charges;
+		int productions = SoldierProfiles[profileIndex].StoredProductions;
+		if (_rechargeMultiplier == 1f) return productions;
 
-		return Math.Max(1, (int)MathF.Round(charges * _chargeMultiplier));
+		return Math.Max(1, (int)MathF.Round(productions * _rechargeMultiplier));
 	}
 
 	/// <summary>
@@ -1763,7 +1745,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
 			BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
-			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, {ScaledMaximumCharges(index)} charges every {profile.RechargeSeconds:0}s. Workers gather {workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s each, gaining {workerProfile.WorkerBuffSummary}.";
+			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, one every {profile.ProductionSeconds:0}s. Workers gather {workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s each, gaining {workerProfile.WorkerBuffSummary}. Both draw from the building's own mana.";
 
 			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
 			AddDraftAbilityToBlueprint(api, profile.BuildingTemplateId);
@@ -1899,6 +1881,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		_api.SetUnitRepairable(site, true);
+		_api.SetUnitMana(site, 0f);
 		RetireDraftSite(playerIndex);
 
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
@@ -1956,6 +1939,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_wardingAegisTimers[entityId] = 0f;
 		_standardAuraTimers[entityId] = 0f;
 		_lastBadgeValues[entityId] = -1;
+		_statedManaMax[entityId] = -1;
+		_statedManaRegen[entityId] = -1f;
 	}
 
 	/// <summary>
@@ -2325,13 +2310,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	private void PublishChargeBadge(IGameAPI api, PlayerId player, UnitId building, int charges)
+	private void PublishProductionBadge(IGameAPI api, PlayerId player, UnitId building, int available)
 	{
 		int entityId = building.UniqueId;
-		if (_lastBadgeValues[entityId] == charges + 1) return;
+		if (_lastBadgeValues[entityId] == available) return;
 
-		_lastBadgeValues[entityId] = charges + 1;
-		api.SetUnitOverheadBadge(building, charges, player.Color);
+		_lastBadgeValues[entityId] = available;
+		api.SetUnitOverheadBadge(building, available, player.Color);
 	}
 
 	private void RestoreRelicsToHero(IGameAPI api, int playerIndex, UnitId hero)
@@ -2465,8 +2450,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Answers how fast a building's worker charges come back. The Courier's Knot shortens every recharge, so it
-	///     applies here as well as to the soldier charges; the Muster Bell states charge recharge and therefore does not
+	///     Answers how fast a building's worker productions come back. The Courier's Knot shortens every recharge, so it
+	///     applies here as well as to the soldier productions; the Muster Bell states soldier recharge and therefore does not
 	///     touch the worker crew's own clock.
 	/// </summary>
 	/// <param name="playerIndex">The seat the building belongs to.</param>
