@@ -251,6 +251,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly byte[] _soldierControlled = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _sourceBuildings = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _publishedMaintainedSoldiers = new int[EcsSharedMemory.MAX_ENTITIES];
+	private readonly int[] _publishedMaintainedWorkers = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly ulong[] _bulwarkStates = new ulong[EcsSharedMemory.MAX_PLAYERS];
 	private readonly ulong[] _buildingBulwarkStates = new ulong[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _lastAlertTimes = new float[EcsSharedMemory.MAX_PLAYERS];
@@ -581,9 +582,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			PublishProductionBadge(api, player, building, AvailableProductions(building));
 
 			int profileIndex = FindProfileIndexByBuilding(building.TemplateID);
-			PublishMaintainedSoldiers(api, owned, building, profileIndex);
+			int maintainedWorkers = CountWorkersOfBuilding(owned, building.UniqueId);
+			PublishMaintainedCapacity(api, owned, building, profileIndex, maintainedWorkers, profile.WorkerCapacity);
 			bool soldierRoom = _soldierCounts[profileIndex] < _capacityCounts[profileIndex];
-			bool workerRoom = CountWorkersOfBuilding(owned, building.UniqueId) < profile.WorkerCapacity;
+			bool workerRoom = maintainedWorkers < profile.WorkerCapacity;
 
 			api.SetAbilityState(building, profile.SoldierAbilityId, disabled: !heroAlive || !soldierRoom, hidden: false);
 			api.SetAbilityState(building, profile.WorkerAbilityId, disabled: !heroAlive || !workerRoom, hidden: false);
@@ -591,29 +593,38 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Publishes the soldiers a building maintains against the capacity it contributes, so a player reads a building's
-	///     share of the army cap on the building itself instead of counting units. The count is the living soldiers this
-	///     building raised, which is what its construction order and its level buffs belong to. The reading is written only
-	///     when it changes, because a panel refreshes every tick and building the same string every tick would be wasted work.
+	///     Publishes what a building maintains against the capacity it contributes: the soldiers it raised against the
+	///     soldier capacity it adds, and the worker crew it raised against its worker capacity. Both lines are fielded by
+	///     its auto-cast abilities rather than by a production queue, so these two readings are all its panel has to say
+	///     about production. The soldier count is the living soldiers this building raised, which is what its construction
+	///     order and its level buffs belong to. Each reading is written only when it changes, because a panel refreshes
+	///     every tick and building the same string every tick would be wasted work.
 	/// </summary>
-	private void PublishMaintainedSoldiers(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId building, int profileIndex)
+	private void PublishMaintainedCapacity(IGameAPI api, ReadOnlySpan<UnitId> owned, UnitId building, int profileIndex, int maintainedWorkers, int workerCapacity)
 	{
-		int maintained = 0;
+		int maintainedSoldiers = 0;
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId unit = owned[index];
 			if (unit.IsDead || unit.IsBuilding) continue;
 			if (_sourceBuildings[unit.UniqueId] != building.UniqueId) continue;
 			if (FindProfileIndexBySoldier(unit.TemplateID) != profileIndex) continue;
-			maintained++;
+			maintainedSoldiers++;
 		}
 
-		int capacity = ScaledCapacity(profileIndex);
-		int published = maintained * 1024 + capacity;
-		if (_publishedMaintainedSoldiers[building.UniqueId] == published) return;
+		int soldierCapacity = ScaledCapacity(profileIndex);
+		int soldierReading = maintainedSoldiers * 1024 + soldierCapacity;
+		if (_publishedMaintainedSoldiers[building.UniqueId] != soldierReading)
+		{
+			_publishedMaintainedSoldiers[building.UniqueId] = soldierReading;
+			api.SetUnitTooltipText(building, "production.soldier_capacity", $"{maintainedSoldiers} / {soldierCapacity}");
+		}
 
-		_publishedMaintainedSoldiers[building.UniqueId] = published;
-		api.SetUnitTooltipText(building, "production.capacity", $"{maintained} / {capacity}");
+		int workerReading = maintainedWorkers * 1024 + workerCapacity;
+		if (_publishedMaintainedWorkers[building.UniqueId] == workerReading) return;
+
+		_publishedMaintainedWorkers[building.UniqueId] = workerReading;
+		api.SetUnitTooltipText(building, "production.worker_capacity", $"{maintainedWorkers} / {workerCapacity}");
 	}
 
 	/// <summary>
@@ -2108,6 +2119,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_soldierControlled[entityId] = 0;
 		_sourceBuildings[entityId] = 0;
 		_publishedMaintainedSoldiers[entityId] = 0;
+		_publishedMaintainedWorkers[entityId] = 0;
 		_workerBuildingOf[entityId] = 0;
 		_workerNodeOf[entityId] = 0;
 		_workerResourceOf[entityId] = 0;
