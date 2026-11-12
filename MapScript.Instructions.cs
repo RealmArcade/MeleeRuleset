@@ -24,12 +24,17 @@ public partial class MapScript
 		api.AddInstructionsSection(
 			"Constructing Buildings",
 			"Buildings simultaneously grant protection, army, and economy.\n\n"
-			+ "Each additional building increases the global armor of your entire base.\n\n"
+			+ "Each additional building increases the global armor of your entire base. Kill enemy outer buildings before the Nexus to make it more vulnerable.\n\n"
 			+ "Buildings automatically send soldiers to fight with your hero.\n\n"
 			+ "Buildings automatically send workers to gather resources.\n\n"
 			+ "Buildings are drafted from a shared deck, changing your strategy each game.\n\n"
 			+ "Each building (and the soldiers and workers they spawn) have their own strengths and weaknesses.\n\n"
 			+ "Destroy your enemies buildings to shrink their army, defenses, and economy.");
+
+		api.AddInstructionsSection(
+			"Combat",
+			"Soldiers follow the hero and fight autonomously, each with its own stats, abilities, and positioning.\n\n"
+			+ "Each additional soldier increases the defenses of your hero. Kill the enemy soldiers first to make their hero more vulnerable.\n\n");
 
 		api.AddInstructionsSection(
 			"Nexus",
