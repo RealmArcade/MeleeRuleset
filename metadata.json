@@ -1508,7 +1508,7 @@
       {
         "TemplateID": "ability/raise_worker_bulwark_hall",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1543,7 +1543,7 @@
       {
         "TemplateID": "ability/raise_worker_warband_yard",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1578,7 +1578,7 @@
       {
         "TemplateID": "ability/raise_worker_spear_lodge",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1613,7 +1613,7 @@
       {
         "TemplateID": "ability/raise_worker_archery_range",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1648,7 +1648,7 @@
       {
         "TemplateID": "ability/raise_worker_sling_camp",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1683,7 +1683,7 @@
       {
         "TemplateID": "ability/raise_worker_bolt_foundry",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1718,7 +1718,7 @@
       {
         "TemplateID": "ability/raise_worker_mender_shrine",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1753,7 +1753,7 @@
       {
         "TemplateID": "ability/raise_worker_signal_post",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
@@ -1788,7 +1788,7 @@
       {
         "TemplateID": "ability/raise_worker_vigil_bastion",
         "Name": "Raise Worker",
-        "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
+        "Description": "Spawns one worker if your economy has remaining capacity.",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "worker_select.rtex",
