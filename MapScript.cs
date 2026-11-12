@@ -18,6 +18,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string ConstructionAbilityId = "ability/begin_construction";
 	private const string AbandonConstructionAbilityId = "ability/abandon_construction";
 	private const string AbandonConstructionIconPath = "wood_logs.rtex";
+	private const string SoldierNameAbilityTextKey = "unit_name";
 	private const string ConstructionSiteTemplateId = "building/construction_site";
 	private const string ReservationNoteKey = "state.note";
 	private const string WorkerTemplateId = "unit/worker";
@@ -1883,6 +1884,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "WorkerCapacity", workerProfile.WorkerCapacity);
 			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "WorkerSeconds", workerProfile.WorkerProductionSeconds);
 			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Buff", workerProfile.WorkerBuffSummary);
+			api.SetAbilityTooltipText(workerProfile.SoldierAbilityId, SoldierNameAbilityTextKey, soldierName);
 		}
 
 		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", AbandonConstructionIconPath, true);

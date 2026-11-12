@@ -1490,7 +1490,7 @@
       {
         "TemplateID": "ability/raise_shieldbearer",
         "Name": "Raise Shieldbearer",
-        "Description": "Fields one Shieldbearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "warrior_shield_bearer.rtex",
@@ -1525,7 +1525,7 @@
       {
         "TemplateID": "ability/raise_axeman",
         "Name": "Raise Axeman",
-        "Description": "Fields one Axeman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "war_axe.rtex",
@@ -1560,7 +1560,7 @@
       {
         "TemplateID": "ability/raise_spear_militia",
         "Name": "Raise Spear Militia",
-        "Description": "Fields one Spear Militia beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "golden_spear.rtex",
@@ -1595,7 +1595,7 @@
       {
         "TemplateID": "ability/raise_bowman",
         "Name": "Raise Bowman",
-        "Description": "Fields one Bowman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "elf_archer.rtex",
@@ -1630,7 +1630,7 @@
       {
         "TemplateID": "ability/raise_slinger",
         "Name": "Raise Slinger",
-        "Description": "Fields one Slinger beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "warrior_tomahawk.rtex",
@@ -1665,7 +1665,7 @@
       {
         "TemplateID": "ability/raise_bolt_thrower",
         "Name": "Raise Bolt Thrower",
-        "Description": "Fields one Bolt Thrower beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "siege_cannon.rtex",
@@ -1700,7 +1700,7 @@
       {
         "TemplateID": "ability/raise_mender",
         "Name": "Raise Mender",
-        "Description": "Fields one Mender beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "healing_scroll.rtex",
@@ -1735,7 +1735,7 @@
       {
         "TemplateID": "ability/raise_standard_bearer",
         "Name": "Raise Standard Bearer",
-        "Description": "Fields one Standard Bearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "life_tree_banner.rtex",
@@ -1770,7 +1770,7 @@
       {
         "TemplateID": "ability/raise_warder",
         "Name": "Raise Warder",
-        "Description": "Fields one Warder beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
+        "Description": "Spawns {{Ability.unit_name}} if army has available capacity",
         "AbilityType": "instant_spell",
         "Role": "Production",
         "IconPath": "crystal_shield.rtex",
