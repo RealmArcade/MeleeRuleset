@@ -441,7 +441,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
 		if (spawnAnchor == Vector3.Zero)
 		{
-			Say(player, "This board declares no spawn anchor for your slot.", new Vector3(1f, 0.4f, 0.3f));
+			Say(player, "This board has no ground to seat a player on.", new Vector3(1f, 0.4f, 0.3f));
 			return;
 		}
 
