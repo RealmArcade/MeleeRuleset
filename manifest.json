@@ -78,18 +78,18 @@
     "vfx_radial": null,
     "vfx_vertical": null,
     "Other": {
-      ".generate_metadata.py": "85e1d71a8717996235240d2263148879dfb5c15e439f4107e22f46d677e125e0",
+      ".generate_metadata.py": "1659741d03e9a10bda1aaf4b58dd33aa144c309a7c6b897190c1c6da7f9bb0bd",
       ".gitignore": "40c45db7143984eb7d56f23445fe9d84a1280d107a3d333b0c490cdd38d3bf9e",
       "AGENTS.md": "ebc79b6c6b89f845701b5190a5283dc2dc13fe726cdaac04f4cddd7b6c5535a5",
       "Directory.Build.targets": "7424a53a847319e9ea56b8b31bc476b685d84b940eabfaa3a17ef2fa9bfe20b3",
       "LICENSE.md": "cf7660fe2a1e73d981dd627c1f47b53992d3135f14dd6fdd3b7d87cd4c1daa05",
-      "MapScript.cs": "dfcfd744f02bf51976bacb3ee6cc63630e228db5399c3f91bdf3692ea798be86",
+      "MapScript.cs": "656707b3e1ddd68792addcf5432c60fe3efcc0fddb0d6f999f3407c84607d75e",
       "MapScript.csproj": "f0e2e3698d2c152cf4362eb414f2f1f413faee74302c744fb5731d5baa2cbed9",
       "MapScript.DamageAffinity.cs": "7ed07c09f85c523116d462a459f9fc22c82f7fdb34843570a082a07d10ccb4e9",
       "MapScript.Instructions.cs": "2c49c0285fda7c0d153ec40f842e8664721e68c8a46651d9ed7866c659a06d94",
-      "metadata.json": "541f9166b8b521c5efdb40a5bdf4bd66b3e140600a3aeb45f3b6bdb23d6f3e6d",
+      "metadata.json": "7415d1e13dae2aeada0339b8f74389c7f4516bed03d1d0a383dfed32aa4c8b9c",
       "NuGet.config": "2211ce92e32f9c93bc98f9172c70cae0d41e5fe750e3a28a245eb754e6c3a389",
-      "README.md": "f63a358dff1a86666c2cddeec479a5954a271585e73549fd5aec8215f08799a5",
+      "README.md": "39b6bda523999409204992d54143a9e24027f292cb8b5e09f7db23e2167ebbc0",
       "realm_lldb.py": "7a1f12b546518397e27af3c14c9f9f036e78d176d1b04a1a66b228055fea7db4",
       "lib/Realm.Ecs.dll": "5c07b3eb7562434be6bb27512843eaa3198a5e179d5db26a2d5b9ed06077a323",
       "lib/Realm.Ecs.pdb": "587c555b12383fa47eaedc8320b7d326538342d0a9baea643cd2b6712f8fd6bb",
@@ -111,11 +111,11 @@
       "locale/ru.json": "bb17ef9fac754c2dd1eb0ae463759be03374ab0f0a95b3d32e71dec0a33602cf",
       "locale/zh.json": "5043ded915f34907a29d67df203c92e44996fe2323d63adf28192ae54570832a",
       "wit/game.g.wit": "c3996d8e592a4091b6006fe5f9935516c27fc9dc44b7486ab392859deb9a6a17",
-      "bin/script/MapScript.wasm": "0d6272448a0a8faec5f057fb5446b9c61b95d569bc92753db5590a44fb3c1426",
+      "bin/script/MapScript.wasm": "64dd0b2e2165b8afc9b03fe3789a7591d3dde3124cb58c850f020f03269ef39e",
       ".agent/skills/skill-assign-asset/SKILL.md": "a7583c99f6d151f7620ffce513f40e073c3936a61d9330eee608544d459bdcde",
       ".agent/skills/skill-translate-map/SKILL.md": "8911cd87aa4d6a1ad176875ee886847377e1816b919eec34e35f3ce13dbbacd8",
       ".agent/skills/skill-translate-map/verify_keys.py": "53fcde2b0cc51d09329581f6ed002c406094eb9bdf4602b1a82e4f6e934dc1fa",
-      "bin/Release/net10.0/wasi-wasm/native/MapScript.wasm": "0d6272448a0a8faec5f057fb5446b9c61b95d569bc92753db5590a44fb3c1426"
+      "bin/Release/net10.0/wasi-wasm/native/MapScript.wasm": "64dd0b2e2165b8afc9b03fe3789a7591d3dde3124cb58c850f020f03269ef39e"
     }
   }
 }

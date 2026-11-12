@@ -735,15 +735,7 @@
         "PathingType": 32,
         "Abilities": null,
         "IsHero": false,
-        "ConstructionRange": 4.0,
-        "ShopItems": [
-          "item/sigil_of_the_wall",
-          "item/couriers_knot",
-          "item/spiked_barricades",
-          "item/deep_granaries",
-          "item/wardens_writ",
-          "item/muster_bell"
-        ]
+        "ConstructionRange": 4.0
       },
       {
         "TemplateID": "building/construction_site",

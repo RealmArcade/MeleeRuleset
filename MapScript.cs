@@ -165,6 +165,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"Soldier recharge is 10% faster. Costs 100 gold and occupies one of the hero's six relic slots."
 	};
 
+	private static readonly string[] RelicIcons =
+	{
+		"golden_champion_shield.rtex",
+		"golden_boots.rtex",
+		"spiked_wooden_barrier.rtex",
+		"wooden_barrel.rtex",
+		"feather_quill.rtex",
+		"magic_bell.rtex"
+	};
+
 	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
 
 	private static readonly SoldierProfile[] SoldierProfiles =
@@ -2368,7 +2378,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			string relicId = RelicIds[index];
 			string tooltip = RelicTooltips[index];
 
-			api.RegisterAbility(relicId, RelicNames[index], tooltip, string.Empty, true);
+			api.RegisterAbility(relicId, RelicNames[index], tooltip, RelicIcons[index], true);
 			api.AddUnitTypeAbility(NexusTemplateId, relicId);
 			api.SetAbilityTooltip(relicId, tooltip);
 

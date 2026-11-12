@@ -351,7 +351,6 @@ resource_wood = {
 }
 
 nexus = building(BUILDINGS[0])
-nexus["ShopItems"] = [relic_entry[0] for relic_entry in RELICS]
 
 metadata = {
     "license": "https://www.realm-game.com/RealmPlatform_UGC_License_v1.txt",
