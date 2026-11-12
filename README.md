@@ -20,7 +20,9 @@ This map declares no `terrain.json` and no coordinates of its own. Where the nin
 
 `metadata.json` here is merged into the board's: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and the board merges last, so the board's own identity, build number, shroud and camera stand while the rules, units, abilities and relics arrive from here.
 
-Every other file comes whole from exactly one map. `MapScript.cs` is the one file the board's `references.json` states comes from this map, because the ruleset is defined here; the `locale/*.json` catalogs come from here too, so the text this ruleset shows a player is translated on the board that composes it. `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md` and `.gitignore` are kept by the board, which builds and maintains its own copies. `MapTemplates.g.cs` and `WasmEntryPoint.g.cs` are never taken from a referenced map at all.
+Every other file comes whole from exactly one map. `locale/*.json` catalogs come from here, so the text this ruleset shows a player is translated on the board that composes it. `MapScript.csproj`, the generated templates, `Directory.Build.targets`, `NuGet.config`, `AGENTS.md`, `LICENSE.md` and `.gitignore` are kept by the board, which builds and maintains its own copies. `MapTemplates.g.cs` and `WasmEntryPoint.g.cs` are never taken from a referenced map at all.
+
+Scripts are not copied either. This map's C# is composed into the board's own workspace under `composed/MeleeRuleset/` with its namespace moved to `Realm.Maps.Composed.MeleeRuleset`, so the board's entry script and this ruleset's script compile into one assembly beside each other, and the board forwards the match's lifecycle to this script through the generated `MapComposition.g.cs`.
 
 ### Prerequisites
 
