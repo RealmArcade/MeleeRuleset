@@ -12,7 +12,7 @@ Activates whenever the work is about this **map's** text in another language:
 - Auditing the map for text that is still English when the player runs it in another language.
 
 ## Scope: map text only
-- **Translate:** `metadata.json` template text the client renders — template `Name` and `Description` for units, buildings, abilities, items and upgrades — plus any key this map's script passes to `api.Translate`.
+- **Translate:** `metadata.json` template text the client renders — template `Name` and `Description` for units, buildings, abilities, items and upgrades — plus the text this map's script publishes itself: the keys it passes to `api.Translate` (or to its own feedback helper, conventionally named `Say`), its `AddInstructionsSection` pages, the names and tooltips it registers with `RegisterAbility`, the text it sets with `Set*Tooltip`, a `string[]` field named `*Tooltips`, a `const string` whose name says tooltip, and the phrases in a `new(...)` record table such as a building profile.
 - **Never edit the Realm client's catalogs.** `Realm.Client/locale/*.json` in the engine repository is engine-screen text (menus, HUD, editor). It is maintained by the engine's own `skill-update-translations` skill, it is not part of this map, and changing it from a map workspace changes nothing about this map.
 - **Never translate:** template ids (`ability/…`, `item/…`), asset paths, icon paths, class names, or catalog keys. `MapProperties.MapTitle`/`MapDescription` are shown in the lobby before the map loads, so translating them here has no effect.
 
@@ -20,7 +20,7 @@ Activates whenever the work is about this **map's** text in another language:
 - A map ships one flat catalog per language in its own folder: `locale/es.json`, `locale/fr.json`, … shaped `{"English text": "translated text"}`.
 - The client merges the map's catalog over the engine's catalogs when the map loads and renders text in the language chosen in **Settings → Game → Language**. The lookup happens on each client, so every player in a match reads the map in their own language; nothing runs in the map's WASM.
 - A missing entry simply reads as the English text, so a **partial catalog is valid**: a map can ship one translated tooltip or a whole language. **No `en.json` is needed** — add one only to deliberately change the English wording.
-- **Keys are the English text itself**, which is why there is no key naming scheme to learn:
+- **The helper reads the script as well as `metadata.json`**, so the catalog is checked against everything the map says. A string the script builds at run time — `$"{name} Crew"`, a count, a burn value — has no key of its own; it is read in English.
   - `Name` → keyed **without** its BBCode. `"[color=#FF0000]Seismic Rupture[/color]"` is translated by an entry keyed `"Seismic Rupture"`; the colour stays in `metadata.json` and the translation is plain text.
   - `Description` → keyed by the **whole string as written**, `{{tokens}}` included. The client looks the string up first and fills the tokens in afterwards, so a translation may move placeholders wherever the target language wants them.
   - Ability `Role` (`"Damage"`) → a key of its own, printed in front of the tooltip as `[Damage]`. Translate it to translate that tag.
@@ -39,6 +39,7 @@ Activates whenever the work is about this **map's** text in another language:
 ## Workflow
 Run every command from the map folder (the directory holding `metadata.json`). The helper script is next to this file; use `py` or `python3` instead of `python` if that is what the machine provides.
 
+0. **Write script text so it can be keyed.** A line one player reads goes through `api.Translate(key, playerIndex)` at the point it is shown: a literal key, and `{0}` for a number the script formats. Text every player reads at once (instructions pages, registered tooltips, buff text) is keyed by the whole string, and a tooltip that states numbers is a template with `{{Ability.Key}}` values published alongside it.
 1. **See where the map stands**
    ```bash
    python .agent/skills/skill-translate-map/verify_keys.py verify
@@ -90,7 +91,7 @@ The keys are the game's own source text and are how the game finds the translati
 
 ## Verification Rules
 `verify_keys.py verify` mirrors the engine's own translation checks, adapted to map catalogs:
-- **Missing keys** — a required name or description with no entry and no valid alternative (the split role + sentence form).
+- **Missing keys** — a required name, description or script line with no entry and no valid alternative (the split role + sentence form).
 - **Empty values** — present but blank.
 - **Placeholder mismatches** — the set of `{{...}}` (and `{0}`) tokens differs from the English text.
 - **BBCode tag mismatches** — the set of tags differs from the English text.

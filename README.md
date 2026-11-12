@@ -55,3 +55,11 @@ Every other file comes whole from exactly one map. `MapScript.cs` is the one fil
 * **Soldier abilities.** Every soldier ability is auto-cast, and the rule it casts by is authored in `metadata.json` rather than driven by the script: Mend is `MostWoundedAlly` below 90% health, Warding Aegis is `LowestHealthAlly`, and Standard Aura is `AllyWithoutEffect`. The engine's `AutoCast.TargetRule` resolves the target, pays the ability's mana and starts its cooldown, so the script carries no per-template timer and a new healing, shielding or aura soldier needs only its metadata.
 * **Instructions.** The map publishes its player-facing rules through `IGameAPI.AddInstructionsSection`, so the in-game instructions menu describes this ruleset's production, supply, gathering, relics and victory conditions without engine UI hard-coding them.
 
+## Localization
+
+A player reads this ruleset in the language they pick in Settings → Game → Language. The catalogs are `locale/{code}.json`, flat `{"English text": "translated text"}` files that the client merges over the game's own when the map loads, so every player reads the same match in their own language and nothing about it runs in WASM. Shipped: `es`, `fr`, `de`, `pt`, `ru`, `zh`, `ja`, `ko`, `ar` and `hi`; a missing entry reads as the English text, so no file has to be complete for a match to be readable.
+
+What is translated: every template name and description in `metadata.json`, every feedback line the script shows a player (through `api.Translate` at the point it is shown, with `{0}` for the numbers so a translation can move them), the four instructions pages, the relic cards, the draft card tooltip - published as a `{{Ability.Key}}` template so the sentence is one key and the numbers are filled in after it - and the buff names and stat phrases the script publishes. A line the script composes at run time from a value it measures - a worker crew's name, a building's Bulwark totals, the burn a Cinder Mark is doing, the reservation note on an unidentified site - is published in English, because there is no string for a catalog to key.
+
+`python .agent/skills/skill-translate-map/verify_keys.py verify` checks every catalog against the text `metadata.json` and the scripts hold, and `list`/`merge`/`prune` add, fill and retire entries; see `.agent/skills/skill-translate-map/SKILL.md`.
+

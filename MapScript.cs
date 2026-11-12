@@ -1,6 +1,7 @@
 ﻿namespace Realm.Maps;
 
 using System;
+using System.Globalization;
 using System.Numerics;
 using Realm.Ecs;
 using Realm.MapAPI;
@@ -151,14 +152,14 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		"Muster Bell"
 	};
 
-	private static readonly string[] RelicEffects =
+	private static readonly string[] RelicTooltips =
 	{
-		"Front-formation soldiers gain 10% maximum health.",
-		"All recharge is 10% faster.",
-		"Owned buildings return 25% of the damage they take.",
-		"Workers gain 10% attack.",
-		"All owned units suffer 10% shorter debuff durations.",
-		"Soldier recharge is 10% faster."
+		"Front-formation soldiers gain 10% maximum health. Costs 100 gold and occupies one of the hero's six relic slots.",
+		"All recharge is 10% faster. Costs 100 gold and occupies one of the hero's six relic slots.",
+		"Owned buildings return 25% of the damage they take. Costs 100 gold and occupies one of the hero's six relic slots.",
+		"Workers gain 10% attack. Costs 100 gold and occupies one of the hero's six relic slots.",
+		"All owned units suffer 10% shorter debuff durations. Costs 100 gold and occupies one of the hero's six relic slots.",
+		"Soldier recharge is 10% faster. Costs 100 gold and occupies one of the hero's six relic slots."
 	};
 
 	private static readonly string[] RelicHotkeys = { "1", "2", "3", "4", "5", "6" };
@@ -339,9 +340,26 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		bool hasResourceNodes = api.GetResourceNodes().Length > 0;
 		if (hasAnchors && hasResourceNodes) return;
 
-		api.ShowFeedbackText(
-			"This board does not seat Melee: it declares no spawn anchors or places no resource nodes.",
-			new Vector3(1f, 0.4f, 0.3f));
+		const string warning = "This board does not seat Melee: it declares no spawn anchors or places no resource nodes.";
+		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
+
+		for (int index = 0; index < players.Length; index++)
+		{
+			PlayerId player = players[index];
+			if (player.Value == 0 || !player.IsActive) continue;
+
+			player.ShowFeedbackText(api.Translate(warning, player.Value), new Vector3(1f, 0.4f, 0.3f));
+		}
+	}
+
+	private void Say(PlayerId player, string key, Vector3 color)
+	{
+		player.ShowFeedbackText(_api.Translate(key, player.Value), color);
+	}
+
+	private void Say(PlayerId player, string key, Vector3 color, string value)
+	{
+		player.ShowFeedbackText(string.Format(_api.Translate(key, player.Value), value), color);
 	}
 
 	public void Update(IGameAPI api, float delta)
@@ -423,7 +441,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
 		if (spawnAnchor == Vector3.Zero)
 		{
-			player.ShowFeedbackText("This board declares no spawn anchor for your slot.", new Vector3(1f, 0.4f, 0.3f));
+			Say(player, "This board declares no spawn anchor for your slot.", new Vector3(1f, 0.4f, 0.3f));
 			return;
 		}
 
@@ -459,7 +477,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(new Vector3(anchor.X, 0f, anchor.Y), 0f);
-		player.ShowFeedbackText($"{HeroFactionNames[heroTemplateIndex]} answers the call.", new Vector3(0.85f, 0.95f, 1f));
+		Say(player, "{0} answers the call.", new Vector3(0.85f, 0.95f, 1f), HeroFactionNames[heroTemplateIndex]);
 	}
 
 	private void UpdateArmyLevel(IGameAPI api, PlayerId player)
@@ -519,7 +537,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ApplyRelicVendorState(api, player);
 
 		player.PanCameraTo(hero.Position, 0.6f);
-		player.ShowFeedbackText("Your hero returns to the field.", new Vector3(0.6f, 1f, 0.7f));
+		Say(player, "Your hero returns to the field.", new Vector3(0.6f, 1f, 0.7f));
 	}
 
 	/// <summary>
@@ -1243,7 +1261,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		// with, and the rest of its pool fills at the two lines' recharge.
 		_api.SetUnitMana(building, ManaPerProduction);
 		PublishProductionBadge(_api, player, building, AvailableProductions(building));
-		player.ShowFeedbackText($"{_api.GetUnitName(building.TemplateID)} is complete.", new Vector3(0.8f, 0.9f, 1f));
+		Say(player, "{0} is complete.", new Vector3(0.8f, 0.9f, 1f), _api.GetUnitName(building.TemplateID));
 	}
 
 	private void HandleUnitDamaged(UnitId victim, UnitId attacker, float damage)
@@ -1284,11 +1302,14 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (elapsed - _lastAlertTimes[playerIndex] < UnderAttackAlertCooldownSeconds) return;
 
 		_lastAlertTimes[playerIndex] = elapsed;
-		string alert = victim.TemplateID == NexusTemplateId
-			? "Your Nexus is under attack!"
-			: $"{_api.GetUnitName(victim.TemplateID)} is under attack.";
-
-		player.ShowFeedbackText(alert, new Vector3(1f, 0.25f, 0.15f));
+		if (victim.TemplateID == NexusTemplateId)
+		{
+			Say(player, "Your Nexus is under attack!", new Vector3(1f, 0.25f, 0.15f));
+		}
+		else
+		{
+			Say(player, "{0} is under attack.", new Vector3(1f, 0.25f, 0.15f), _api.GetUnitName(victim.TemplateID));
+		}
 		player.PingMinimap(victim.Position);
 		player.PlayWarningSound();
 	}
@@ -1343,7 +1364,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		PlayerId player = _api.GetPlayer(playerIndex);
 		ApplyRelicVendorState(_api, player);
-		player.ShowFeedbackText($"Your hero has fallen. The army disperses. Your hero returns in {revivalSeconds:0} seconds.", new Vector3(1f, 0.35f, 0.3f));
+		Say(player, "Your hero has fallen. The army disperses. Your hero returns in {0} seconds.", new Vector3(1f, 0.35f, 0.3f), MathF.Round(revivalSeconds).ToString(CultureInfo.InvariantCulture));
 		player.PlayWarningSound();
 	}
 
@@ -1502,7 +1523,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			_api.AdvanceUnitConstruction(building, remainingSeconds * RequisitionCompletionFractionForLevel(heroLevel));
 
 			PlayerId player = _api.GetPlayer(playerIndex);
-			player.ShowFeedbackText("Requisition speeds the work along.", new Vector3(0.9f, 0.85f, 0.5f));
+			Say(player, "Requisition speeds the work along.", new Vector3(0.9f, 0.85f, 0.5f));
 			return;
 		}
 	}
@@ -1528,7 +1549,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_cinderfieldDamageTimers[slot] = 0f;
 
 		api.SpawnExpandingGroundRing(position, CinderfieldRadius, CinderfieldRadius, 1.1f, new Vector3(1f, 0.3f, 0.05f));
-		api.GetPlayer(playerIndex).ShowFeedbackText("Cinderfield burns the ground.", new Vector3(1f, 0.4f, 0.15f));
+		api.GetPlayer(playerIndex).ShowFeedbackText(api.Translate("Cinderfield burns the ground.", playerIndex), new Vector3(1f, 0.4f, 0.15f));
 	}
 
 	private static float CinderfieldDurationForLevel(int level)
@@ -1621,21 +1642,21 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (_draftOpen[playerIndex] != 0)
 		{
 			RetireUnansweredSite(playerIndex, site);
-			player.ShowFeedbackText("Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer)
 		{
 			RetireUnansweredSite(playerIndex, site);
-			player.ShowFeedbackText($"All {_maximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "All {0} building locations are taken.", new Vector3(1f, 0.7f, 0.3f), _maximumBuildingsPerPlayer.ToString(CultureInfo.InvariantCulture));
 			return;
 		}
 
 		if (player.Wood < BuildingWoodCost)
 		{
 			RetireUnansweredSite(playerIndex, site);
-			player.ShowFeedbackText("A construction costs 100 wood.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "A construction costs {0} wood.", new Vector3(1f, 0.7f, 0.3f), BuildingWoodCost.ToString("0", CultureInfo.InvariantCulture));
 			return;
 		}
 
@@ -1643,7 +1664,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (optionCount == 0)
 		{
 			RetireUnansweredSite(playerIndex, site);
-			player.ShowFeedbackText("No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
@@ -1671,7 +1692,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		PublishReservation(_api, playerIndex, site, optionCount);
 		ApplyDraftAbilityState(_api, playerIndex);
 
-		player.ShowFeedbackText($"{optionCount} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
+		Say(player, "{0} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f), optionCount.ToString(CultureInfo.InvariantCulture));
 		_api.SpawnExpandingGroundRing(new Vector3(sitePosition.X, 0f, sitePosition.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
 	}
 
@@ -1847,17 +1868,27 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	/// </summary>
 	private void RegisterDraftAbilities(IGameAPI api)
 	{
+		const string draftTooltip = "Draft {{Ability.Building}} for {{Ability.Cost}} wood. Raises {{Ability.Soldier}}: {{Ability.Capacity}} capacity, one every {{Ability.ProductionSeconds}}s. Workers gather {{Ability.Resource}}: {{Ability.WorkerCapacity}} at {{Ability.WorkerSeconds}}s each, gaining {{Ability.Buff}}. Both draw from the building's own mana.";
+
 		for (int index = 0; index < SoldierProfiles.Length; index++)
 		{
 			SoldierProfile profile = SoldierProfiles[index];
 			string buildingName = api.GetUnitName(profile.BuildingTemplateId);
 			string soldierName = api.GetUnitName(profile.SoldierTemplateId);
 			BuildingProfile workerProfile = FindBuildingProfile(profile.BuildingTemplateId);
-			string tooltip = $"Draft {buildingName} for 100 wood. Raises {soldierName}: {ScaledCapacity(index)} capacity, one every {profile.ProductionSeconds:0}s. Workers gather {workerProfile.WorkerResourceType}: {workerProfile.WorkerCapacity} at {workerProfile.WorkerProductionSeconds:0}s each, gaining {workerProfile.WorkerBuffSummary}. Both draw from the building's own mana.";
 
-			api.RegisterAbility(profile.BuildingTemplateId, buildingName, tooltip, string.Empty, true);
+			api.RegisterAbility(profile.BuildingTemplateId, buildingName, draftTooltip, string.Empty, true);
 			AddDraftAbilityToSite(api, profile.BuildingTemplateId);
-			api.SetAbilityTooltip(profile.BuildingTemplateId, tooltip);
+			api.SetAbilityTooltip(profile.BuildingTemplateId, draftTooltip);
+			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Building", buildingName);
+			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "Cost", BuildingWoodCost);
+			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Soldier", soldierName);
+			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "Capacity", ScaledCapacity(index));
+			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "ProductionSeconds", profile.ProductionSeconds);
+			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Resource", workerProfile.WorkerResourceType);
+			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "WorkerCapacity", workerProfile.WorkerCapacity);
+			api.SetAbilityTooltipValue(profile.BuildingTemplateId, "WorkerSeconds", workerProfile.WorkerProductionSeconds);
+			api.SetAbilityTooltipText(profile.BuildingTemplateId, "Buff", workerProfile.WorkerBuffSummary);
 		}
 
 		api.RegisterAbility(AbandonConstructionAbilityId, "Abandon Construction", "Gives back the 100 wood the open construction reserved.", string.Empty, true);
@@ -1977,7 +2008,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		// the three this player is being offered, so a cast of any other building is refused without touching the draft.
 		if (_draftOpen[playerIndex] == 0 || !IsDraftOption(playerIndex, profileIndex))
 		{
-			player.ShowFeedbackText("That building is not part of this construction.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "That building is not part of this construction.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
@@ -1988,7 +2019,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			_draftOptionCounts[playerIndex] = 0;
 			_draftSiteEntities[playerIndex] = 0;
 			player.AdjustWood(BuildingWoodCost);
-			player.ShowFeedbackText("The site is gone. Its 100 wood is returned.", new Vector3(1f, 0.3f, 0.25f));
+			Say(player, "The site is gone. Its {0} wood is returned.", new Vector3(1f, 0.3f, 0.25f), BuildingWoodCost.ToString("0", CultureInfo.InvariantCulture));
 			ApplyDraftAbilityState(_api, playerIndex);
 			return;
 		}
@@ -2001,7 +2032,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		{
 			RetireUnansweredSite(playerIndex, site);
 			player.AdjustWood(BuildingWoodCost);
-			player.ShowFeedbackText("The site could not be raised as that building.", new Vector3(1f, 0.3f, 0.25f));
+			Say(player, "The site could not be raised as that building.", new Vector3(1f, 0.3f, 0.25f));
 			ApplyDraftAbilityState(_api, playerIndex);
 			return;
 		}
@@ -2018,9 +2049,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		// A site is raised by the hero working at it, never by the site existing near the hero. Nothing is ordered here, so
 		// the player right-clicks the site to send the hero to raise it, and walking away stops the work where it stood.
-		player.ShowFeedbackText(
-			$"{_api.GetUnitName(buildingTemplateId)} is under construction. Right-click the site to raise it.",
-			new Vector3(0.85f, 0.9f, 0.6f));
+		Say(player, "{0} is under construction. Right-click the site to raise it.", new Vector3(0.85f, 0.9f, 0.6f), _api.GetUnitName(buildingTemplateId));
 		player.PlayClickSound();
 	}
 
@@ -2042,7 +2071,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (!player.IsActive) return;
 
 		player.AdjustWood(BuildingWoodCost);
-		player.ShowFeedbackText("Construction cancelled. Its 100 wood is returned.", new Vector3(0.75f, 0.75f, 0.75f));
+		Say(player, "Construction cancelled. Its {0} wood is returned.", new Vector3(0.75f, 0.75f, 0.75f), BuildingWoodCost.ToString("0", CultureInfo.InvariantCulture));
 	}
 
 	private void ResetUnitRuntimeState(int entityId)
@@ -2341,7 +2370,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		for (int index = 0; index < RelicIds.Length; index++)
 		{
 			string relicId = RelicIds[index];
-			string tooltip = $"{RelicEffects[index]} Costs {RelicCost:0} gold and occupies one of the hero's six relic slots.";
+			string tooltip = RelicTooltips[index];
 
 			api.RegisterAbility(relicId, RelicNames[index], tooltip, string.Empty, true);
 			api.AddUnitTypeAbility(NexusTemplateId, relicId);
@@ -2366,27 +2395,27 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int heroEntityId = _heroEntities[playerIndex];
 		if (heroEntityId <= 0 || new UnitId(heroEntityId).IsDead)
 		{
-			player.ShowFeedbackText("Your hero must be alive to buy a relic.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "Your hero must be alive to buy a relic.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		UnitId hero = new(heroEntityId);
 		if (hero.HasItem(relicId))
 		{
-			player.ShowFeedbackText($"Your hero already holds {RelicNames[relicIndex]}.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "Your hero already holds {0}.", new Vector3(1f, 0.7f, 0.3f), _api.Translate(RelicNames[relicIndex], playerIndex));
 			return;
 		}
 
 		int heldRelics = CountRelics(hero);
 		if (heldRelics >= RelicSlotCount)
 		{
-			player.ShowFeedbackText("All six relic slots are full.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "All six relic slots are full.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (player.Gold < RelicCost)
 		{
-			player.ShowFeedbackText($"A relic costs {RelicCost:0} gold.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "A relic costs {0} gold.", new Vector3(1f, 0.7f, 0.3f), RelicCost.ToString("0", CultureInfo.InvariantCulture));
 			return;
 		}
 
@@ -2394,13 +2423,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (!_api.AddItemToUnit(hero, relicId))
 		{
 			player.AdjustGold(RelicCost);
-			player.ShowFeedbackText("The relic could not be equipped.", new Vector3(1f, 0.7f, 0.3f));
+			Say(player, "The relic could not be equipped.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		RefreshRelics(_api, player);
 		ApplyRelicVendorState(_api, player);
-		player.ShowFeedbackText($"{RelicNames[relicIndex]} is yours.", new Vector3(0.85f, 0.95f, 0.75f));
+		Say(player, "{0} is yours.", new Vector3(0.85f, 0.95f, 0.75f), _api.Translate(RelicNames[relicIndex], playerIndex));
 		player.PlayClickSound();
 	}
 
