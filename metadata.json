@@ -62,7 +62,6 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
-        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 4,
           "AgilityPerLevel": 1.8,
@@ -120,7 +119,6 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
-        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 1.2,
           "AgilityPerLevel": 2,
@@ -178,7 +176,6 @@
         "GoldBounty": 100,
         "XpBounty": 120,
         "ExperiencePerLevel": 200,
-        "MaxLevel": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 2.2,
           "AgilityPerLevel": 2.2,
@@ -230,10 +227,10 @@
         "GoldBounty": 8,
         "XpBounty": 6,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
+          "StrengthPerLevel": 1.4,
+          "AgilityPerLevel": 0.6,
+          "VitalityPerLevel": 3,
+          "IntelligencePerLevel": 0.2,
           "WisdomPerLevel": 0,
           "FortunePerLevel": 0
         },
@@ -272,10 +269,10 @@
         "GoldBounty": 10,
         "XpBounty": 8,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
+          "StrengthPerLevel": 1.8,
+          "AgilityPerLevel": 0.9,
+          "VitalityPerLevel": 2.2,
+          "IntelligencePerLevel": 0.2,
           "WisdomPerLevel": 0,
           "FortunePerLevel": 0
         },
@@ -314,9 +311,9 @@
         "GoldBounty": 9,
         "XpBounty": 7,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
+          "StrengthPerLevel": 1.5,
+          "AgilityPerLevel": 1,
+          "VitalityPerLevel": 2.4,
           "IntelligencePerLevel": 0.3,
           "WisdomPerLevel": 0,
           "FortunePerLevel": 0
@@ -356,12 +353,12 @@
         "GoldBounty": 7,
         "XpBounty": 5,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
+          "StrengthPerLevel": 1,
+          "AgilityPerLevel": 1.4,
+          "VitalityPerLevel": 1.8,
           "IntelligencePerLevel": 0.3,
           "WisdomPerLevel": 0,
-          "FortunePerLevel": 0
+          "FortunePerLevel": 0.2
         },
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
         "VisualMode": "Mesh",
@@ -398,12 +395,12 @@
         "GoldBounty": 5,
         "XpBounty": 4,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
+          "StrengthPerLevel": 0.9,
+          "AgilityPerLevel": 1.6,
+          "VitalityPerLevel": 1.6,
+          "IntelligencePerLevel": 0.2,
           "WisdomPerLevel": 0,
-          "FortunePerLevel": 0
+          "FortunePerLevel": 0.3
         },
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
         "VisualMode": "Mesh",
@@ -440,10 +437,10 @@
         "GoldBounty": 16,
         "XpBounty": 12,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
+          "StrengthPerLevel": 2.2,
+          "AgilityPerLevel": 0.4,
+          "VitalityPerLevel": 2.2,
+          "IntelligencePerLevel": 0.2,
           "WisdomPerLevel": 0,
           "FortunePerLevel": 0
         },
@@ -482,11 +479,11 @@
         "GoldBounty": 6,
         "XpBounty": 5,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
+          "StrengthPerLevel": 0.5,
           "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
-          "WisdomPerLevel": 0,
+          "VitalityPerLevel": 2,
+          "IntelligencePerLevel": 1.4,
+          "WisdomPerLevel": 0.4,
           "FortunePerLevel": 0
         },
         "ModelPath": "fantasy_warrior_unit_1.rmesh",
@@ -526,12 +523,12 @@
         "GoldBounty": 6,
         "XpBounty": 5,
         "LevelGrowth": {
-          "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
-          "WisdomPerLevel": 0,
-          "FortunePerLevel": 0
+          "StrengthPerLevel": 0.8,
+          "AgilityPerLevel": 0.9,
+          "VitalityPerLevel": 2.2,
+          "IntelligencePerLevel": 0.9,
+          "WisdomPerLevel": 0.3,
+          "FortunePerLevel": 0.1
         },
         "ModelPath": "orc_warrior_7.rmesh",
         "VisualMode": "Mesh",
@@ -571,9 +568,9 @@
         "XpBounty": 6,
         "LevelGrowth": {
           "StrengthPerLevel": 1.2,
-          "AgilityPerLevel": 0.8,
-          "VitalityPerLevel": 2.5,
-          "IntelligencePerLevel": 0.3,
+          "AgilityPerLevel": 0.7,
+          "VitalityPerLevel": 2.8,
+          "IntelligencePerLevel": 0.6,
           "WisdomPerLevel": 0,
           "FortunePerLevel": 0
         },
@@ -755,7 +752,7 @@
         "MaxHp": 1,
         "Armor": 0,
         "CostGold": 0,
-        "CostWood": 0,
+        "CostWood": 100,
         "CostStone": 0,
         "PopCost": 0,
         "ProductionTime": 0,

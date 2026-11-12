@@ -1653,13 +1653,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		if (player.Wood < BuildingWoodCost)
-		{
-			RetireUnansweredSite(playerIndex, site);
-			Say(player, "A construction costs {0} wood.", new Vector3(1f, 0.7f, 0.3f), BuildingWoodCost.ToString("0", CultureInfo.InvariantCulture));
-			return;
-		}
-
 		int optionCount = DrawDraftOptions(playerIndex);
 		if (optionCount == 0)
 		{
@@ -1677,7 +1670,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_api.StartUnitConstruction(site, SiteConstructionSeconds);
 		_api.SetUnitConstructionCeiling(site, SiteHeldFinishedFraction);
 
-		player.AdjustWood(-BuildingWoodCost);
 		_draftOpen[playerIndex] = 1;
 		_draftOptionCounts[playerIndex] = optionCount;
 		_draftSiteEntities[playerIndex] = site.UniqueId;
@@ -2055,7 +2047,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	/// <summary>
 	///     Gives back what an unanswered draft reserved: the deck entries return because nothing was ever taken from the
-	///     deck, and the 100 wood returns because it was charged when the draw was made.
+	///     deck, and the 100 wood returns because the placement charged it as the site's own template price.
 	/// </summary>
 	private void AbandonOpenDraft(int playerIndex)
 	{
