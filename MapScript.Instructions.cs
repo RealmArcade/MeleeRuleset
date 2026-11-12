@@ -23,12 +23,12 @@ public partial class MapScript
 
 		api.AddInstructionsSection(
 			"Drafting Buildings",
-			$"Begin Construction costs {BuildingWoodCost:0} wood and draws up to {DefaultDraftOptionCount} buildings from the shared deck. Pick one to draw its site where you stand, then right-click the site with your hero to raise it.\n\n"
+			$"Begin Construction costs {BuildingWoodCost:0} wood and draws up to {_draftOptionsPerDraw} buildings from the shared deck. Pick one to draw its site where you stand, then right-click the site with your hero to raise it.\n\n"
 			+ "A building that is taken leaves the deck for everyone until the deck is replenished. Abandon Construction gives the wood back while the site is still open.");
 
 		api.AddInstructionsSection(
 			"Building Supply",
-			$"Each building you raise costs one supply, and you may hold {DefaultMaximumBuildingsPerPlayer} buildings at a time. Your Nexus is free and does not count against that limit.\n\n"
+			$"Each building you raise costs one supply, and you may hold {_maximumBuildingsPerPlayer} buildings at a time. Your Nexus is free and does not count against that limit.\n\n"
 			+ "Buildings are also your army's only source of soldiers and workers, so the supply cap is what keeps a wide base from becoming an unlimited army.");
 
 		api.AddInstructionsSection(
@@ -44,7 +44,7 @@ public partial class MapScript
 
 		api.AddInstructionsSection(
 			"Relics",
-			$"Relics are bought at the Nexus for {RelicCost:0} gold and equipped in one of your hero's {RelicSlotCount} slots. They are player-wide upgrades: every soldier and every building you own carries them.\n\n"
+			$"Relics are bought at the Nexus for {RelicCost:0} gold and equipped in one of your hero's {RelicSlotCount} slots. They are player-wide upgrades: every soldier and every building you own benefits from the rule a relic changes.\n\n"
 			+ "Your hero's innate is always on and cannot be toggled. Together with relics it is the whole upgrade path; there is no research tree.");
 
 		api.AddInstructionsSection(

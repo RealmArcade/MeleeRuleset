@@ -474,7 +474,7 @@
         "HpRegen": 0.6,
         "MaxMana": 0,
         "ManaRegen": 0,
-        "DamageType": "physical",
+        "DamageType": "magic",
         "MovementType": "Ground",
         "SightRange": 16,
         "AcquisitionRange": 12,

@@ -21,6 +21,7 @@ public partial class MapScript
 	private const float AffinityFullEffectiveness = 1f;
 	private const float AffinityShieldFlashCooldownSeconds = 0.6f;
 	private const float AffinityShieldFlashRadius = 2.6f;
+	private const float AffinityThreeWayExponent = 0.38f;
 
 	private readonly float[] _affinityEnergy = new float[EcsSharedMemory.MAX_PLAYERS * EcsSharedMemory.MAX_PLAYERS];
 	private readonly double[] _affinityTouchedAt = new double[EcsSharedMemory.MAX_PLAYERS * EcsSharedMemory.MAX_PLAYERS];
@@ -160,12 +161,17 @@ public partial class MapScript
 		float pairEnergy = _affinityEnergy[pair];
 
 		float exposure = 0f;
+		bool attackersFightEachOther = false;
 		for (int otherTeam = 1; otherTeam < EcsSharedMemory.MAX_PLAYERS; otherTeam++)
 		{
 			if (otherTeam == defendingTeam) continue;
 			if (otherTeam == attackingTeam) continue;
 
 			exposure += _affinityEnergy[PairIndex(otherTeam, defendingTeam)];
+			if (!attackersFightEachOther && (_affinityEnergy[PairIndex(attackingTeam, otherTeam)] > 0f || _affinityEnergy[PairIndex(otherTeam, attackingTeam)] > 0f))
+			{
+				attackersFightEachOther = true;
+			}
 		}
 
 		// A pair that has never exchanged a blow against a defender nobody else is fighting is an opening duel, and an
@@ -176,8 +182,13 @@ public partial class MapScript
 		if (exposure <= 0f) return AffinityFullEffectiveness;
 
 		float exposureTotal = pairEnergy + exposure;
-		float share = pairEnergy / exposureTotal;
-		float effectiveness = MathF.Sqrt(Math.Clamp(share, 0f, 1f));
+		float share = Math.Clamp(pairEnergy / exposureTotal, 0f, 1f);
+
+		// Two teams that have both joined one defender are each fighting half the fight, so their damage is halved. When
+		// those two attackers are also fighting each other, the engagement is a three-way one and every participant keeps
+		// more of its strength, which is what makes a true three-way fight less punishing than a two-on-one.
+		float exponent = attackersFightEachOther ? AffinityThreeWayExponent : 1f;
+		float effectiveness = MathF.Pow(share, exponent);
 
 		return Math.Clamp(effectiveness, AffinityMinimumEffectiveness, AffinityFullEffectiveness);
 	}

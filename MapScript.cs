@@ -57,10 +57,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float RequisitionMaximumCompletionFraction = 0.5f;
 	private const float BulwarkRecalculateSeconds = 1f;
 	private const float BulwarkSoldierRadius = 10f;
+	private const float BulwarkAttackerRadius = 12f;
 	private const float BulwarkArmorPerSoldier = 0.6f;
 	private const float BulwarkMagicResistancePerSoldier = 0.6f;
 	private const float BulwarkArmorPerBuilding = 1.5f;
 	private const float BulwarkMagicResistancePerBuilding = 1.5f;
+	private const float BulwarkPenetrationPerAttacker = 0.1f;
+	private const float BulwarkNexusCoefficient = 1f;
 	private const float HeroRepairHealthPercentPerSecond = 0.03f;
 	private const string BulwarkBuffId = "buff/bulwark";
 	private const string WorkerCrewBuffIcon = "res://Assets/UI/golden_hammers.webp";
@@ -248,6 +251,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private readonly byte[] _soldierControlled = new byte[EcsSharedMemory.MAX_ENTITIES];
 	private readonly int[] _sourceBuildings = new int[EcsSharedMemory.MAX_ENTITIES];
 	private readonly ulong[] _bulwarkStates = new ulong[EcsSharedMemory.MAX_PLAYERS];
+	private readonly ulong[] _buildingBulwarkStates = new ulong[EcsSharedMemory.MAX_ENTITIES];
 	private readonly float[] _lastAlertTimes = new float[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _relicFlags = new byte[EcsSharedMemory.MAX_PLAYERS];
 	private readonly byte[] _burningFromMark = new byte[EcsSharedMemory.MAX_ENTITIES];
@@ -433,11 +437,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_nexusPositionsX[playerIndex] = anchor.X;
 		_nexusPositionsZ[playerIndex] = anchor.Y;
 
-		UnitId nexus = player.SpawnUnit(NexusTemplateId, anchor, false, true);
-		if (nexus.IsValid) _nexusEntities[playerIndex] = nexus.UniqueId;
-
+		// The hero's template decides the side's innate, and the innate applies to every owned unit, the Nexus
+		// included. It is resolved before anything is spawned so the starting structure never misses it.
 		int heroTemplateIndex = ResolveHeroTemplateIndex(api.GetPlayerFaction(playerIndex));
 		_heroTemplateIndices[playerIndex] = heroTemplateIndex;
+
+		UnitId nexus = player.SpawnUnit(NexusTemplateId, anchor, false, true);
+		if (nexus.IsValid)
+		{
+			_nexusEntities[playerIndex] = nexus.UniqueId;
+			ApplyInnateToUnit(api, playerIndex, nexus);
+		}
 
 		var heroPosition = new Vector2(anchor.X + 4f, anchor.Y + 4f);
 		UnitId hero = player.SpawnUnit(HeroTemplateIds[heroTemplateIndex], heroPosition, true, true);
@@ -562,7 +572,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 			if (building.IsDormant || !IsBuildingOperational(api, building))
 			{
-				DisableProduction(api, building, profile);
+				StopBuildingProduction(api, building, profile);
 				continue;
 			}
 
@@ -578,10 +588,23 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	private static void DisableProduction(IGameAPI api, UnitId building, BuildingProfile profile)
+	/// <summary>
+	///     Switches a dormant or unfinished building's production off and stops its mana pool from regenerating. A
+	///     destroyed building keeps the mana it already held, but nothing refills it until the building is whole again.
+	/// </summary>
+	/// <param name="api">The game API reference to change the building's state.</param>
+	/// <param name="building">The building that cannot produce.</param>
+	/// <param name="profile">The production profile the building was raised with.</param>
+	private void StopBuildingProduction(IGameAPI api, UnitId building, BuildingProfile profile)
 	{
 		api.SetAbilityState(building, profile.SoldierAbilityId, true, false);
 		api.SetAbilityState(building, profile.WorkerAbilityId, true, false);
+
+		int entityId = building.UniqueId;
+		if (_statedManaRegen[entityId] == 0f) return;
+
+		api.SetUnitManaRegen(building, 0f);
+		_statedManaRegen[entityId] = 0f;
 	}
 
 	/// <summary>
@@ -598,7 +621,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		float regen = (ManaPerProduction / soldierRecharge) + (ManaPerProduction / workerRecharge);
 
 		int entityId = building.UniqueId;
-		if (_statedManaMax[entityId] != maximum)
+		if (_statedManaMax[entityId] != maximum || MathF.Abs(building.MaxMana - maximum) > 0.5f)
 		{
 			api.SetUnitMaxMana(building, maximum);
 			_statedManaMax[entityId] = maximum;
@@ -771,6 +794,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		// rather than asking for the string on every worker check.
 		_workerResourceOf[workerId] = ResourceByteOf(api.GetUnitWorkerAssignment(worker));
 		api.SetUnitLevel(worker, Math.Max(1, _buildingConstructionOrder[buildingId]));
+		ApplyInnateToUnit(api, player.Value, worker);
 
 		for (int index = 0; index < profile.WorkerBuffIds.Length; index++)
 		{
@@ -807,11 +831,16 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.SetUnitTooltipText(worker, "buff.deep_granaries_worker.icon", "res://Assets/UI/scroll_icon.webp");
 	}
 
-	private static void PublishCinderMarkText(IGameAPI api, UnitId unit)
+	private static void PublishCinderMarkText(IGameAPI api, UnitId unit, float burnPerSecond)
 	{
 		api.SetUnitTooltipText(unit, "buff.cinder_mark.name", "Cinder Mark");
-		api.SetUnitTooltipText(unit, "buff.cinder_mark.description", "Burns for 6 magic damage a second for 2 seconds.");
+		api.SetUnitTooltipText(unit, "buff.cinder_mark.description", $"Burns for {burnPerSecond:0.#} magic damage a second for 2 seconds.");
 		api.SetUnitTooltipText(unit, "buff.cinder_mark.icon", "res://Assets/UI/fire_spell.webp");
+	}
+
+	private static float CinderMarkEffectiveBurnPerSecond(IGameAPI api, UnitId sable)
+	{
+		return CinderMarkDamagePerSecond * (1f + api.GetUnitSpellPower(sable));
 	}
 
 	private static string BuffCore(string buffId)
@@ -963,6 +992,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			if (!unit.HasBuff("buff/cinder_mark")) continue;
 
 			int entityId = unit.UniqueId;
+
+			// The damage resolver applies the caster's spell power to magic damage, so the banked tick is the authored
+			// rate and the engine scales it once. Scaling here as well would apply spell power twice.
 			float banked = _cinderMarkDamage[entityId] + CinderMarkDamagePerSecond * delta;
 			float whole = MathF.Floor(banked);
 			_cinderMarkDamage[entityId] = banked - whole;
@@ -1104,52 +1136,136 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		ReadOnlySpan<UnitId> owned = player.GetUnits();
 		int nearbySoldiers = 0;
-		int functionalBuildings = 0;
+		int functionalBuildings = CountAlliedOperationalBuildings(api, player);
 
 		for (int index = 0; index < owned.Length; index++)
 		{
 			UnitId unit = owned[index];
 			if (unit.IsDead) continue;
-
-			if (unit.IsBuilding)
-			{
-				if (IsBuildingOperational(api, unit)) functionalBuildings++;
-				continue;
-			}
-
+			if (unit.IsBuilding) continue;
 			if (unit.IsHero) continue;
 			if (_workerBuildingOf[unit.UniqueId] > 0) continue;
 			if (Vector3.DistanceSquared(unit.Position, hero.Position) <= BulwarkSoldierRadius * BulwarkSoldierRadius) nearbySoldiers++;
 		}
 
-		// The bulwark is restated every second and a modifier is appended rather than replaced, so the previous
-		// statement is withdrawn first. Without that the hero would keep last second's soldiers as well as this one's.
 		float heroArmor = nearbySoldiers * BulwarkArmorPerSoldier;
 		float heroResistance = nearbySoldiers * BulwarkMagicResistancePerSoldier;
 		api.RemoveStatModifiers(hero, "bulwark/hero");
 		api.AddStatModifier(hero, "Armor", false, heroArmor, "bulwark/hero");
 		api.AddStatModifier(hero, "MagicResistance", false, heroResistance, "bulwark/hero");
 
-		int nexusEntityId = _nexusEntities[playerIndex];
-		if (nexusEntityId <= 0) return;
+		ulong heroState = (ulong)(uint)nearbySoldiers;
+		if (_bulwarkStates[playerIndex] != heroState)
+		{
+			_bulwarkStates[playerIndex] = heroState;
+			PublishBulwarkText(api, hero, "Nearby soldiers", nearbySoldiers, heroArmor, heroResistance);
+		}
 
-		UnitId nexus = new(nexusEntityId);
-		if (nexus.IsDead) return;
+		for (int index = 0; index < owned.Length; index++)
+		{
+			UnitId building = owned[index];
+			if (building.IsDead || !building.IsBuilding) continue;
+			if (!IsBuildingOperational(api, building)) continue;
 
-		EnsureBulwarkBuff(api, nexus);
+			RefreshBuildingBulwark(api, player, building, functionalBuildings);
+		}
+	}
 
-		float buildingArmor = functionalBuildings * BulwarkArmorPerBuilding;
-		float buildingResistance = functionalBuildings * BulwarkMagicResistancePerBuilding;
-		api.RemoveStatModifiers(nexus, "bulwark/buildings");
-		api.AddStatModifier(nexus, "Armor", false, buildingArmor, "bulwark/buildings");
-		api.AddStatModifier(nexus, "MagicResistance", false, buildingResistance, "bulwark/buildings");
+	private void RefreshBuildingBulwark(IGameAPI api, PlayerId player, UnitId building, int functionalBuildings)
+	{
+		EnsureBulwarkBuff(api, building);
 
-		ulong state = ((ulong)(uint)nearbySoldiers << 32) | (uint)functionalBuildings;
-		if (_bulwarkStates[playerIndex] == state) return;
+		int attackingForce = LargestHostileTeamForceNear(api, player, building.Position);
+		float penetration = Math.Clamp(attackingForce * BulwarkPenetrationPerAttacker, 0f, 1f);
+		float coefficient = BulwarkCoefficientFor(building.TemplateID);
+		float armor = functionalBuildings * BulwarkArmorPerBuilding * coefficient * (1f - penetration);
+		float resistance = functionalBuildings * BulwarkMagicResistancePerBuilding * coefficient * (1f - penetration);
 
-		_bulwarkStates[playerIndex] = state;
-		PublishBulwarkText(api, hero, "Nearby soldiers", nearbySoldiers, heroArmor, heroResistance);
-		PublishBulwarkText(api, nexus, "Buildings counted", functionalBuildings, buildingArmor, buildingResistance);
+		api.RemoveStatModifiers(building, "bulwark/buildings");
+		api.AddStatModifier(building, "Armor", false, armor, "bulwark/buildings");
+		api.AddStatModifier(building, "MagicResistance", false, resistance, "bulwark/buildings");
+
+		ulong state = ((ulong)(uint)functionalBuildings << 32) | ((ulong)(uint)attackingForce << 16) | (uint)BitConverter.SingleToInt32Bits(coefficient);
+		int entityId = building.UniqueId;
+		if (_buildingBulwarkStates[entityId] == state) return;
+
+		_buildingBulwarkStates[entityId] = state;
+		PublishBuildingBulwarkText(api, building, functionalBuildings, attackingForce, armor, resistance);
+	}
+
+	/// <summary>
+	///     Counts every operational building its team holds, not only the defender's own. The rule groups by team, so an
+	///     ally's base reinforces the same buildings the player's own base does.
+	/// </summary>
+	/// <param name="api">The game API reference to read the teams from.</param>
+	/// <param name="player">The player whose team is counted.</param>
+	/// <returns>The number of finished, living buildings held by the player and its declared allies.</returns>
+	private int CountAlliedOperationalBuildings(IGameAPI api, PlayerId player)
+	{
+		ReadOnlySpan<PlayerId> players = api.GetActivePlayers();
+		int functionalBuildings = 0;
+
+		for (int playerIndex = 0; playerIndex < players.Length; playerIndex++)
+		{
+			PlayerId ally = players[playerIndex];
+			if (ally.Value <= 0 || !ally.IsActive) continue;
+			if (ally.Value != player.Value && !api.ArePlayersAllied(ally.Value, player.Value)) continue;
+
+			ReadOnlySpan<UnitId> owned = ally.GetUnits();
+			for (int unitIndex = 0; unitIndex < owned.Length; unitIndex++)
+			{
+				UnitId unit = owned[unitIndex];
+				if (unit.IsDead || !unit.IsBuilding) continue;
+				if (IsBuildingOperational(api, unit)) functionalBuildings++;
+			}
+		}
+
+		return functionalBuildings;
+	}
+
+	private int LargestHostileTeamForceNear(IGameAPI api, PlayerId player, Vector3 position)
+	{
+		Span<int> teamCounts = stackalloc int[EcsSharedMemory.MAX_PLAYERS];
+		ReadOnlySpan<UnitId> nearby = api.GetUnitsInRadius(position, BulwarkAttackerRadius);
+
+		for (int index = 0; index < nearby.Length; index++)
+		{
+			UnitId unit = nearby[index];
+			if (unit.IsDead || unit.IsBuilding) continue;
+			if (unit.Player <= 0 || unit.Player == player.Value) continue;
+			if (api.ArePlayersAllied(unit.Player, player.Value)) continue;
+
+			int team = api.GetPlayer(unit.Player).Team;
+			if (team <= 0 || team >= teamCounts.Length) continue;
+
+			teamCounts[team]++;
+		}
+
+		int largest = 0;
+		for (int team = 1; team < teamCounts.Length; team++)
+		{
+			if (teamCounts[team] > largest) largest = teamCounts[team];
+		}
+
+		return largest;
+	}
+
+	private static float BulwarkCoefficientFor(string templateId)
+	{
+		return templateId switch
+		{
+			NexusTemplateId => BulwarkNexusCoefficient,
+			"building/bulwark_hall" => 0.9f,
+			"building/warband_yard" => 0.7f,
+			"building/spear_lodge" => 0.8f,
+			"building/archery_range" => 0.6f,
+			"building/bolt_foundry" => 0.85f,
+			"building/sling_camp" => 0.5f,
+			"building/mender_shrine" => 0.7f,
+			"building/signal_post" => 0.6f,
+			"building/vigil_bastion" => 0.75f,
+			_ => 0.5f
+		};
 	}
 
 	private static void EnsureBulwarkBuff(IGameAPI api, UnitId unit)
@@ -1165,6 +1281,13 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.SetUnitTooltipText(unit, "buff.bulwark.name", "Bulwark");
 		api.SetUnitTooltipText(unit, "buff.bulwark.description", $"{countLabel}: {count}. Armor +{armor:0.#}, magic resistance +{resistance:0.#}.");
 		api.SetUnitTooltipText(unit, "buff.bulwark.icon", "res://Assets/UI/battle_shield.webp");
+	}
+
+	private static void PublishBuildingBulwarkText(IGameAPI api, UnitId building, int functionalBuildings, int attackingForce, float armor, float resistance)
+	{
+		api.SetUnitTooltipText(building, "buff.bulwark.name", "Bulwark");
+		api.SetUnitTooltipText(building, "buff.bulwark.description", $"Allied buildings: {functionalBuildings}. Nearby attackers: {attackingForce}. Armor +{armor:0.#}, magic resistance +{resistance:0.#}.");
+		api.SetUnitTooltipText(building, "buff.bulwark.icon", "res://Assets/UI/battle_shield.webp");
 	}
 
 	private void HandleConstructionFinished(UnitId building)
@@ -1190,6 +1313,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		PlayerId player = _api.GetPlayer(playerIndex);
 		BuildingProfile profile = FindBuildingProfile(building.TemplateID);
 		StateBuildingMana(_api, playerIndex, building, profile);
+		ApplyInnateToUnit(_api, playerIndex, building);
 
 		// A finished site opens with one production already paid for, which is the production the building opens with
 		// with, and the rest of its pool fills at the two lines' recharge.
@@ -1222,7 +1346,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		if (IsCinderMarkHero(attacker.Player) && !victim.IsBuilding && _burningFromMark[victim.UniqueId] == 0)
 		{
 			victim.AddBuff("buff/cinder_mark", 2f);
-			PublishCinderMarkText(_api, victim);
+			int sableEntityId = _heroEntities[attacker.Player];
+			float burnPerSecond = sableEntityId > 0 ? CinderMarkEffectiveBurnPerSecond(_api, new UnitId(sableEntityId)) : CinderMarkDamagePerSecond;
+			PublishCinderMarkText(_api, victim, burnPerSecond);
 		}
 
 		if (victim.IsBuilding && HasRelic(playerIndex, 2) && attacker.IsValid)
@@ -2413,12 +2539,27 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		switch (_heroTemplateIndices[playerIndex])
 		{
 			case 0:
+				// Unbroken is a player-wide rule, so it belongs on every owned unit, not only the ones that fight.
 				api.AddStatModifier(unit, "Armor", false, 6f, "innate/unbroken");
 				api.AddStatModifier(unit, "Tenacity", true, 0.1f, "innate/unbroken");
 				break;
 			case 1:
+				// Cinder Mark is the army's on-hit rule. Workers cannot strike an enemy and buildings never attack, so
+				// the marker stays on the combatants instead of describing a burn they cannot apply.
+				if (unit.IsBuilding || _workerBuildingOf[unit.UniqueId] > 0) break;
+
 				unit.AddBuff("buff/cinder_mark", 2f);
-				PublishCinderMarkText(api, unit);
+				int sableEntityId = _heroEntities[playerIndex];
+				float burnPerSecond = sableEntityId > 0 ? CinderMarkEffectiveBurnPerSecond(api, new UnitId(sableEntityId)) : CinderMarkDamagePerSecond;
+				PublishCinderMarkText(api, unit, burnPerSecond);
+				break;
+			case 2:
+				// Standing Ledger is a production-room rule, not a combat stat. Putting its extra production on the
+				// MaxMana stat lets the stat pipeline keep the larger pool instead of overwriting the map's number
+				// with the template's smaller one on the next recalculation.
+				if (!unit.IsBuilding || FindProfileIndexByBuilding(unit.TemplateID) < 0) break;
+
+				api.AddStatModifier(unit, "MaxMana", false, ManaPerProduction, "innate/standing_ledger");
 				break;
 		}
 	}
