@@ -1320,7 +1320,17 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	private void HandleConstructionFinished(UnitId building)
 	{
-		if (!building.IsValid || !building.IsBuilding) return;
+		if (!building.IsValid) return;
+
+		// A site marker is placed finished, so this is where its draw opens: it is not a building the match built, and
+		// the packages it offers are what says which building rises there.
+		if (string.Equals(building.TemplateID, BlueprintTemplateId, StringComparison.OrdinalIgnoreCase))
+		{
+			BeginConstruction(building);
+			return;
+		}
+
+		if (!building.IsBuilding) return;
 
 		int playerIndex = building.Player;
 		if (playerIndex <= 0) return;
@@ -1554,12 +1564,6 @@ public partial class MapScript : IWasmModule, ILobbyScript
 			return;
 		}
 
-		if (abilityId == ConstructionAbilityId)
-		{
-			BeginConstruction(playerIndex, position);
-			return;
-		}
-
 		if (abilityId == AbandonConstructionAbilityId)
 		{
 			AbandonOpenDraft(playerIndex);
@@ -1705,27 +1709,42 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 	}
 
-	private void BeginConstruction(int playerIndex, Vector3 position)
+	/// <summary>
+	///     Opens the draw on the site the player just placed. The site is the blueprint the placement order raised, so the
+	///     ground was chosen from the blueprint's own silhouette rather than from a cast aimed at a point. The packages
+	///     appear in the marker's command grid, so choosing one reads as choosing what to raise on that ground rather than
+	///     as a second cast from the hero that already paid for the site.
+	/// </summary>
+	/// <param name="blueprint">The site marker the player placed.</param>
+	private void BeginConstruction(UnitId blueprint)
 	{
+		int playerIndex = blueprint.Player;
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 
 		PlayerId player = _api.GetPlayer(playerIndex);
-		if (!player.IsActive) return;
+		if (!player.IsActive)
+		{
+			RetireUnansweredSite(playerIndex, blueprint);
+			return;
+		}
 
 		if (_draftOpen[playerIndex] != 0)
 		{
+			RetireUnansweredSite(playerIndex, blueprint);
 			player.ShowFeedbackText("Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer)
 		{
+			RetireUnansweredSite(playerIndex, blueprint);
 			player.ShowFeedbackText($"All {_maximumBuildingsPerPlayer} building locations are taken.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
 		if (player.Wood < BuildingWoodCost)
 		{
+			RetireUnansweredSite(playerIndex, blueprint);
 			player.ShowFeedbackText("A construction costs 100 wood.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
@@ -1733,17 +1752,8 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int optionCount = DrawDraftOptions(playerIndex);
 		if (optionCount == 0)
 		{
+			RetireUnansweredSite(playerIndex, blueprint);
 			player.ShowFeedbackText("No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
-			return;
-		}
-
-		// The blueprints stands where the player cast, and it is the thing that carries the draw: the packages appear in
-		// its command grid, so choosing one reads as choosing what to raise on that ground rather than as a second cast
-		// from the hero that already paid for the site.
-		UnitId blueprint = player.SpawnUnit(BlueprintTemplateId, new Vector2(position.X, position.Z), true, true);
-		if (!blueprint.IsValid)
-		{
-			player.ShowFeedbackText("The site could not be marked there.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
@@ -1766,7 +1776,21 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		ApplyDraftAbilityState(_api, playerIndex);
 
 		player.ShowFeedbackText($"{optionCount} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f));
-		_api.SpawnExpandingGroundRing(new Vector3(position.X, 0f, position.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
+		_api.SpawnExpandingGroundRing(new Vector3(sitePosition.X, 0f, sitePosition.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
+	}
+
+	/// <summary>
+	///     Takes a site marker back that no draw was opened on. The marker is removed on the following update rather than
+	///     while the placement that raised it is still resolving, which is the same reason an answered site retires then.
+	/// </summary>
+	/// <param name="playerIndex">The player whose placement is being refused.</param>
+	/// <param name="blueprint">The site marker to remove.</param>
+	private void RetireUnansweredSite(int playerIndex, UnitId blueprint)
+	{
+		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
+		if (!blueprint.IsValid) return;
+
+		_draftSiteRetirements[playerIndex] = blueprint.UniqueId;
 	}
 
 	/// <summary>
