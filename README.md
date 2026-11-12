@@ -12,10 +12,10 @@ The `ugc-SecludedCrest` repository is the composing map: its `references.json` n
 
 ## The board supplies the placement
 
-This map declares no `terrain.json` and no coordinates of its own. Where the twelve resource nodes stand and where each seat begins are the board's statements, so any board authored for Melee plays by these rules unchanged:
+This map declares no `terrain.json` and no coordinates of its own. Where the nineteen resource nodes stand and where each seat begins are the board's statements, so any board authored for Melee plays by these rules unchanged:
 
 * The four starting points are `SpawnAnchors` in the board's `terrain.json`, one per player slot. The script reads slot *n*'s point with `IGameAPI.GetSpawnAnchor(n)`, places that player's Nexus on it, and puts the hero beside it. A board with no anchor for a slot seats nobody there and says so in that player's feedback rather than inventing a position.
-* The twelve resource nodes are props the board places with the template ids this map declares (`resource/melee_gold_mine` and `resource/melee_woodland`). The engine attaches the node's capacity from the template when the prop loads, so the script spawns nothing and only reads the layout, through `IGameAPI.GetResourceNodes`.
+* The nineteen resource nodes - thirteen gold mines and six woodlands on Secluded Crest - are props the board places with the template ids this map declares (`resource/melee_gold_mine` and `resource/melee_woodland`). The engine attaches the node's capacity from the template when the prop loads, so the script spawns nothing and only reads the layout, through `IGameAPI.GetResourceNodes`.
 * A board that declares no anchors or places no nodes is not a Melee board. The script warns the table once at the start of a match instead of seating players somewhere arbitrary.
 
 `metadata.json` here is merged into the board's: objects merge key by key, arrays are combined with each entry kept once by its `TemplateID`, and the board merges last, so the board's own identity, build number, shroud and camera stand while the rules, units, abilities and relics arrive from here.
