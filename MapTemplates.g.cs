@@ -9,33 +9,85 @@ namespace Realm.Maps;
 
 public static class UnitIds
 {
-	public const string Chad = "unit/chad";
-	public const string Kevin = "unit/kevin";
+	public const string Vale = "hero/vale";
+	public const string Sable = "hero/sable";
+	public const string Corvus = "hero/corvus";
+	public const string Shieldbearer = "unit/shieldbearer";
+	public const string Axeman = "unit/axeman";
+	public const string SpearMilitia = "unit/spear_militia";
+	public const string Bowman = "unit/bowman";
+	public const string Slinger = "unit/slinger";
+	public const string BoltThrower = "unit/bolt_thrower";
+	public const string Mender = "unit/mender";
+	public const string StandardBearer = "unit/standard_bearer";
+	public const string Warder = "unit/warder";
+	public const string CrestBoar = "unit/crest_boar";
+	public const string RidgeGiant = "unit/ridge_giant";
+	public const string Worker = "unit/worker";
 }
 
 public static class BuildingIds
 {
-	public const string ClockTower = "building/clock_tower";
-	public const string TimberFramedHouse = "building/timber_framed_house";
+	public const string Nexus = "building/nexus";
+	public const string ConstructionSite = "building/construction_site";
+	public const string BulwarkHall = "building/bulwark_hall";
+	public const string WarbandYard = "building/warband_yard";
+	public const string SpearLodge = "building/spear_lodge";
+	public const string ArcheryRange = "building/archery_range";
+	public const string BoltFoundry = "building/bolt_foundry";
+	public const string SlingCamp = "building/sling_camp";
+	public const string MenderShrine = "building/mender_shrine";
+	public const string SignalPost = "building/signal_post";
+	public const string VigilBastion = "building/vigil_bastion";
 }
 
 public static class ResourceIds
 {
-	public const string ConiferousTree1 = "resource/coniferous_tree_1";
-	public const string PalmTree = "resource/palm_tree";
+	public const string MeleeGoldMine = "resource/melee_gold_mine";
+	public const string MeleeWoodland = "resource/melee_woodland";
 }
 
 public static class PropIds
 {
-	public const string CrystalCluster29 = "prop/crystal_cluster_29";
-	public const string SpikedWoodenStake = "prop/spiked_wooden_stake";
 }
 
 public static class AbilityIds
 {
-	public const string Fireball = "ability/fireball";
-	public const string Holylight = "ability/holylight";
-	public const string Lightning = "ability/lightning";
+	public const string InnateUnbroken = "ability/innate_unbroken";
+	public const string InnateCinderMark = "ability/innate_cinder_mark";
+	public const string InnateStandingLedger = "ability/innate_standing_ledger";
+	public const string GroundingShout = "ability/grounding_shout";
+	public const string HoldFast = "ability/hold_fast";
+	public const string ShieldBash = "ability/shield_bash";
+	public const string EmberLance = "ability/ember_lance";
+	public const string Cinderfield = "ability/cinderfield";
+	public const string Backdraft = "ability/backdraft";
+	public const string Requisition = "ability/requisition";
+	public const string ForcedMarch = "ability/forced_march";
+	public const string EmergencyLevy = "ability/emergency_levy";
+	public const string Mend = "ability/mend";
+	public const string WardingAegis = "ability/warding_aegis";
+	public const string StandardAura = "ability/standard_aura";
+	public const string BeginConstruction = "ability/begin_construction";
+	public const string RaiseShieldbearer = "ability/raise_shieldbearer";
+	public const string RaiseWorkerBulwarkHall = "ability/raise_worker_bulwark_hall";
+	public const string RaiseAxeman = "ability/raise_axeman";
+	public const string RaiseWorkerWarbandYard = "ability/raise_worker_warband_yard";
+	public const string RaiseSpearMilitia = "ability/raise_spear_militia";
+	public const string RaiseWorkerSpearLodge = "ability/raise_worker_spear_lodge";
+	public const string RaiseBowman = "ability/raise_bowman";
+	public const string RaiseWorkerArcheryRange = "ability/raise_worker_archery_range";
+	public const string RaiseSlinger = "ability/raise_slinger";
+	public const string RaiseWorkerSlingCamp = "ability/raise_worker_sling_camp";
+	public const string RaiseBoltThrower = "ability/raise_bolt_thrower";
+	public const string RaiseWorkerBoltFoundry = "ability/raise_worker_bolt_foundry";
+	public const string RaiseMender = "ability/raise_mender";
+	public const string RaiseWorkerMenderShrine = "ability/raise_worker_mender_shrine";
+	public const string RaiseStandardBearer = "ability/raise_standard_bearer";
+	public const string RaiseWorkerSignalPost = "ability/raise_worker_signal_post";
+	public const string RaiseWarder = "ability/raise_warder";
+	public const string RaiseWorkerVigilBastion = "ability/raise_worker_vigil_bastion";
+	public const string Gather = "ability/gather";
 }
 
 public static class WeaponIds
@@ -48,6 +100,14 @@ public static class UpgradeIds
 
 public static class ItemIds
 {
+	public const string Wood = "item/wood";
+	public const string Gold = "item/gold";
+	public const string SigilOfTheWall = "item/sigil_of_the_wall";
+	public const string CouriersKnot = "item/couriers_knot";
+	public const string SpikedBarricades = "item/spiked_barricades";
+	public const string DeepGranaries = "item/deep_granaries";
+	public const string WardensWrit = "item/wardens_writ";
+	public const string MusterBell = "item/muster_bell";
 }
 
 public static class VfxIds
@@ -56,11 +116,5 @@ public static class VfxIds
 
 public static class WaterProfileIds
 {
-	public const string WaterShallow = "water_shallow";
-	public const string WaterDeep = "water_deep";
-	public const string LiquidLava = "liquid_lava";
-	public const string LiquidAcid = "liquid_acid";
-	public const string LiquidPoison = "liquid_poison";
-	public const string LiquidGeothermal = "liquid_geothermal";
 }
 
