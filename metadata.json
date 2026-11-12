@@ -1140,7 +1140,7 @@
         "AbilityType": "passive",
         "Role": "Innate",
         "Description": "Vale and every owned unit carry +6 armor and +10% tenacity while Vale lives. Always active; never cast or toggled.",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "golden_defense_shield.rtex",
         "GridX": 0,
         "GridY": 1
       },
@@ -1150,7 +1150,7 @@
         "AbilityType": "passive",
         "Role": "Innate",
         "Description": "Sable's abilities and every owned unit's attacks burn their target for 6 magic damage a second for 2 seconds. Always active; never cast or toggled.",
-        "IconPath": "res://Assets/UI/fire_spell.webp",
+        "IconPath": "fire_spell.rtex",
         "GridX": 0,
         "GridY": 1
       },
@@ -1160,7 +1160,7 @@
         "AbilityType": "passive",
         "Role": "Innate",
         "Description": "Every owned soldier-granting building stores one more production worth of mana. Always active; never cast or toggled.",
-        "IconPath": "res://Assets/UI/scroll_icon.webp",
+        "IconPath": "ancient_scroll.rtex",
         "GridX": 0,
         "GridY": 1
       },
@@ -1200,7 +1200,8 @@
             "Duration": 2,
             "BuffId": "buff/grounding_shout"
           }
-        ]
+        ],
+        "IconPath": "thunder_skull.rtex"
       },
       {
         "TemplateID": "ability/hold_fast",
@@ -1230,7 +1231,8 @@
               "Cap": 4
             }
           }
-        ]
+        ],
+        "IconPath": "defensive_shield.rtex"
       },
       {
         "TemplateID": "ability/shield_bash",
@@ -1264,7 +1266,8 @@
               "Cap": 1.55
             }
           }
-        ]
+        ],
+        "IconPath": "sword_and_shield.rtex"
       },
       {
         "TemplateID": "ability/ember_lance",
@@ -1295,7 +1298,8 @@
               "Cap": 170
             }
           }
-        ]
+        ],
+        "IconPath": "fire_spear.rtex"
       },
       {
         "TemplateID": "ability/cinderfield",
@@ -1308,7 +1312,8 @@
         "AreaOfEffectRadius": 5,
         "GridX": 1,
         "GridY": 0,
-        "Hotkey": "W"
+        "Hotkey": "W",
+        "IconPath": "fire_ring.rtex"
       },
       {
         "TemplateID": "ability/backdraft",
@@ -1345,7 +1350,8 @@
             "Radius": 4,
             "Amount": 3
           }
-        ]
+        ],
+        "IconPath": "magic_explosion.rtex"
       },
       {
         "TemplateID": "ability/requisition",
@@ -1357,7 +1363,8 @@
         "TargetRange": 0,
         "GridX": 0,
         "GridY": 0,
-        "Hotkey": "Q"
+        "Hotkey": "Q",
+        "IconPath": "golden_scroll.rtex"
       },
       {
         "TemplateID": "ability/forced_march",
@@ -1380,7 +1387,8 @@
             "Duration": 5,
             "BuffId": "buff/forced_march"
           }
-        ]
+        ],
+        "IconPath": "move_speed.rtex"
       },
       {
         "TemplateID": "ability/emergency_levy",
@@ -1392,7 +1400,8 @@
         "TargetRange": 0,
         "GridX": 2,
         "GridY": 0,
-        "Hotkey": "E"
+        "Hotkey": "E",
+        "IconPath": "mana_crystal.rtex"
       },
       {
         "TemplateID": "ability/mend",
@@ -1410,7 +1419,8 @@
             "Targets": "allies",
             "Amount": 22
           }
-        ]
+        ],
+        "IconPath": "magic_healing_light.rtex"
       },
       {
         "TemplateID": "ability/warding_aegis",
@@ -1429,7 +1439,8 @@
             "Amount": 60,
             "Duration": 8
           }
-        ]
+        ],
+        "IconPath": "blue_magic_shield.rtex"
       },
       {
         "TemplateID": "ability/standard_aura",
@@ -1449,7 +1460,8 @@
             "Duration": 6,
             "BuffId": "buff/standard_aura"
           }
-        ]
+        ],
+        "IconPath": "blue_crusade_banner.rtex"
       },
       {
         "TemplateID": "ability/begin_construction",
@@ -1461,7 +1473,8 @@
         "TargetRange": 8,
         "PlacementTemplateId": "unit/blueprint",
         "GridX": 3,
-        "GridY": 0
+        "GridY": 0,
+        "IconPath": "golden_hammers.rtex"
       },
       {
         "TemplateID": "ability/raise_shieldbearer",
@@ -1469,7 +1482,7 @@
         "Description": "Fields one Shieldbearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "warrior_shield_bearer.rtex",
         "ManaCost": 100.0,
         "Cooldown": 5.0,
         "TargetRange": 0.0,
@@ -1487,7 +1500,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 12.0,
         "TargetRange": 0.0,
@@ -1504,7 +1517,7 @@
         "Description": "Fields one Axeman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "war_axe.rtex",
         "ManaCost": 100.0,
         "Cooldown": 4.0,
         "TargetRange": 0.0,
@@ -1522,7 +1535,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 8.0,
         "TargetRange": 0.0,
@@ -1539,7 +1552,7 @@
         "Description": "Fields one Spear Militia beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "golden_spear.rtex",
         "ManaCost": 100.0,
         "Cooldown": 5.0,
         "TargetRange": 0.0,
@@ -1557,7 +1570,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 10.0,
         "TargetRange": 0.0,
@@ -1574,7 +1587,7 @@
         "Description": "Fields one Bowman beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "elf_archer.rtex",
         "ManaCost": 100.0,
         "Cooldown": 4.0,
         "TargetRange": 0.0,
@@ -1592,7 +1605,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 7.0,
         "TargetRange": 0.0,
@@ -1609,7 +1622,7 @@
         "Description": "Fields one Slinger beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "warrior_tomahawk.rtex",
         "ManaCost": 100.0,
         "Cooldown": 3.0,
         "TargetRange": 0.0,
@@ -1627,7 +1640,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 6.0,
         "TargetRange": 0.0,
@@ -1644,7 +1657,7 @@
         "Description": "Fields one Bolt Thrower beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "siege_cannon.rtex",
         "ManaCost": 100.0,
         "Cooldown": 8.0,
         "TargetRange": 0.0,
@@ -1662,7 +1675,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 14.0,
         "TargetRange": 0.0,
@@ -1679,7 +1692,7 @@
         "Description": "Fields one Mender beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "healing_scroll.rtex",
         "ManaCost": 100.0,
         "Cooldown": 5.0,
         "TargetRange": 0.0,
@@ -1697,7 +1710,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 12.0,
         "TargetRange": 0.0,
@@ -1714,7 +1727,7 @@
         "Description": "Fields one Standard Bearer beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "life_tree_banner.rtex",
         "ManaCost": 100.0,
         "Cooldown": 5.0,
         "TargetRange": 0.0,
@@ -1732,7 +1745,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 9.0,
         "TargetRange": 0.0,
@@ -1749,7 +1762,7 @@
         "Description": "Fields one Warder beside the building. Auto-cast keeps the line filled while the building holds mana and the army has room for it.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/battle_shield.webp",
+        "IconPath": "crystal_shield.rtex",
         "ManaCost": 100.0,
         "Cooldown": 6.0,
         "TargetRange": 0.0,
@@ -1767,7 +1780,7 @@
         "Description": "Raises one worker crew member at the building. Every building shares one mana pool between its soldiers and its crew, so whichever is called first spends what the building has stored.",
         "AbilityType": "instant_spell",
         "Role": "Production",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "worker_select.rtex",
         "ManaCost": 100.0,
         "Cooldown": 10.0,
         "TargetRange": 0.0,
@@ -1784,7 +1797,7 @@
         "Description": "Sends this unit to work the nearest tree or gold mine. A worker keeps gathering on its own; a hero only gathers when given this order.",
         "AbilityType": "target_spell",
         "Role": "Economy",
-        "IconPath": "res://Assets/UI/golden_hammers.webp",
+        "IconPath": "wood_and_gold.rtex",
         "TargetRange": 6.0,
         "GridX": 3,
         "GridY": 1,
@@ -1810,7 +1823,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "wood_logs.rtex"
       },
       {
         "TemplateID": "item/gold",
@@ -1824,7 +1838,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "gold_coin.rtex"
       },
       {
         "TemplateID": "item/sigil_of_the_wall",
@@ -1836,7 +1851,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "golden_champion_shield.rtex"
       },
       {
         "TemplateID": "item/couriers_knot",
@@ -1848,7 +1864,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "golden_boots.rtex"
       },
       {
         "TemplateID": "item/spiked_barricades",
@@ -1860,7 +1877,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "spiked_wooden_barrier.rtex"
       },
       {
         "TemplateID": "item/deep_granaries",
@@ -1872,7 +1890,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "wooden_barrel.rtex"
       },
       {
         "TemplateID": "item/wardens_writ",
@@ -1884,7 +1903,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "feather_quill.rtex"
       },
       {
         "TemplateID": "item/muster_bell",
@@ -1896,7 +1916,8 @@
         "ItemLevel": 0,
         "CanDrop": false,
         "GrantedUpgrades": null,
-        "GrantedAbilities": null
+        "GrantedAbilities": null,
+        "IconPath": "magic_bell.rtex"
       }
     ],
     "Attachments": [],
