@@ -261,6 +261,7 @@ def hero(entry):
         "BuildOptions": None,
         "Abilities": abilities,
         "IsHero": True,
+        "IncludeInDefaultHotkeySelection": True,
     }
 
 def building(entry):
