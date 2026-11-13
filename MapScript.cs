@@ -418,6 +418,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		}
 
 		api.SetTeamCount(2);
+		api.SetTeamsTogetherDefault(true);
 
 		for (int slot = 1; slot <= api.SlotCount; slot++)
 		{
