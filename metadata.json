@@ -1080,7 +1080,7 @@
       {
         "TemplateID": "resource/melee_gold_mine",
         "Name": "Gold Mine",
-        "Description": "A finite gold node. Its capacity is its health, its resistances decide how much of a worker's hit lands, and it gives up one piece of gold for every four points that get through.",
+        "Description": "A finite gold node that stands at level {{Level}} holding {{MaxHealth}} gold. Its capacity is its health, its resistances decide how much of a worker's hit lands, and it gives up one piece of gold for every four points that get through.",
         "ModelPath": "gold_mine.rmesh",
         "VisualMode": "Mesh",
         "MaxCapacity": 600,
@@ -1108,7 +1108,7 @@
       {
         "TemplateID": "resource/melee_woodland",
         "Name": "Woodland",
-        "Description": "A finite wood node. Its capacity is its health, its resistances decide how much of a worker's hit lands, and it gives up one piece of wood for every four points that get through.",
+        "Description": "A finite wood node that stands at level {{Level}} holding {{MaxHealth}} wood. Its capacity is its health, its resistances decide how much of a worker's hit lands, and it gives up one piece of wood for every four points that get through.",
         "ModelPath": "coniferous_tree_1.rmesh",
         "VisualMode": "Mesh",
         "MaxCapacity": 800,
