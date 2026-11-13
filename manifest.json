@@ -78,7 +78,7 @@
     "vfx_radial": null,
     "vfx_vertical": null,
     "Other": {
-      ".generate_metadata.py": "c329e326d1d1400c29c6047fda35618b7b66a0c0a7dd3716f005b5691a1a3ccc",
+      ".generate_metadata.py": "a15f3cac178fd6847ef609bd6dbca50bb2ed4fd3bb2b18b1368e19471915284f",
       ".gitignore": "40c45db7143984eb7d56f23445fe9d84a1280d107a3d333b0c490cdd38d3bf9e",
       "AGENTS.md": "ebc79b6c6b89f845701b5190a5283dc2dc13fe726cdaac04f4cddd7b6c5535a5",
       "Directory.Build.targets": "7424a53a847319e9ea56b8b31bc476b685d84b940eabfaa3a17ef2fa9bfe20b3",
@@ -87,7 +87,7 @@
       "MapScript.csproj": "f0e2e3698d2c152cf4362eb414f2f1f413faee74302c744fb5731d5baa2cbed9",
       "MapScript.DamageAffinity.cs": "7ed07c09f85c523116d462a459f9fc22c82f7fdb34843570a082a07d10ccb4e9",
       "MapScript.Instructions.cs": "2c49c0285fda7c0d153ec40f842e8664721e68c8a46651d9ed7866c659a06d94",
-      "metadata.json": "abe553d813f3a7e9c97b76043691e95a6203f7ef32bc850d97e99abe4dad031a",
+      "metadata.json": "48efc1e40ec1380cc74ff8ccc5529d23dde0a5ab82df5ad8ae26aaf660de6416",
       "NuGet.config": "2211ce92e32f9c93bc98f9172c70cae0d41e5fe750e3a28a245eb754e6c3a389",
       "README.md": "4e59e6e2e0f1c17e0d4218a64dab0ff83824769339bd0dfd0dde5c22d8849de3",
       "realm_lldb.py": "7a1f12b546518397e27af3c14c9f9f036e78d176d1b04a1a66b228055fea7db4",

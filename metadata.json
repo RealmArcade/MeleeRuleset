@@ -244,7 +244,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/axeman",
@@ -286,7 +287,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/spear_militia",
@@ -328,7 +330,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/bowman",
@@ -370,7 +373,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/slinger",
@@ -412,7 +416,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/bolt_thrower",
@@ -454,7 +459,8 @@
         "CollisionCircle": 0.5,
         "PathingType": 9,
         "Abilities": null,
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/mender",
@@ -498,7 +504,8 @@
         "Abilities": [
           "ability/mend"
         ],
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/standard_bearer",
@@ -542,7 +549,8 @@
         "Abilities": [
           "ability/standard_aura"
         ],
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/warder",
@@ -586,7 +594,8 @@
         "Abilities": [
           "ability/warding_aegis"
         ],
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       },
       {
         "TemplateID": "unit/crest_boar",
@@ -708,7 +717,8 @@
         "Abilities": [
           "ability/gather"
         ],
-        "IsHero": false
+        "IsHero": false,
+        "IncludeInDefaultHotkeySelection": false
       }
     ],
     "Buildings": [
