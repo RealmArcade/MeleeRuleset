@@ -769,6 +769,17 @@
             Holds the spatial trigger zones a map registered, as positions into one immutable content id payload.
             </summary>
         </member>
+        <member name="T:Realm.Ecs.Components.Core.SoulboundItemIdArray">
+            <summary>
+            Holds the item string identifiers a unit's soulbound set names, sized to the number of slots a unit can fill.
+            </summary>
+        </member>
+        <member name="T:Realm.Ecs.Components.Core.SoulboundItems">
+            <summary>
+                Holds the items a unit holds that are bound to it, so they stay with that unit instead of being put down or
+                handed to another unit.
+            </summary>
+        </member>
         <member name="T:Realm.Ecs.Components.Core.SpectatorPerspective">
             <summary>
                 Represents the active player perspective ID being viewed by a live spectator.
@@ -1024,6 +1035,12 @@
                 Tracks the construction progress of a building entity, from placement to completion.
             </summary>
         </member>
+        <member name="T:Realm.Ecs.Components.Resources.DropItemTask">
+            <summary>
+                Tracks the item a unit was told to put down: which item, how many pieces of it leave the inventory, and the spot
+                the unit walks to before it lets go.
+            </summary>
+        </member>
         <member name="T:Realm.Ecs.Components.Resources.Food">
             <summary>
                 Represents the Food resource.
@@ -1270,6 +1287,12 @@
         <member name="T:Realm.Ecs.Components.Tags.Hero">
             <summary>
                 Tag indicating the entity is a unique, powerful hero unit.
+            </summary>
+        </member>
+        <member name="T:Realm.Ecs.Components.Tags.IncludeInDefaultHotkeySelection">
+            <summary>
+                Marks a unit the default hotkeys pick: F1 and F2 recall the player's tagged units, so a unit the map drives itself
+                stays out of a selection the player cannot command.
             </summary>
         </member>
         <member name="T:Realm.Ecs.Components.Tags.Invulnerable">

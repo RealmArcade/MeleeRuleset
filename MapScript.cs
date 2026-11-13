@@ -32,12 +32,11 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const float StartingGold = 200f;
 	private const float StartingWood = 100f;
 	// A site is raised before the deck's package is locked, so the site has to state how much work it needs before the
-	// building it becomes is known. Every package takes the same time to raise once it is known, and the work a player
-	// has already put into the site is carried over rather than paid again.
+	// building it becomes is known. The duration is replaced by the chosen building's own once the package is locked.
 	private const float SiteConstructionSeconds = 30f;
-	// A site that has not been committed to a building is held one percent short of completion, so a site can stand nearly
-	// raised for as long as its owner is undecided and can never finish as a building nobody chose.
-	private const float SiteHeldFinishedFraction = 0.99f;
+	// A site that has not been committed to a building takes no work at all, so nothing is built on ground the player has
+	// not decided on and no construction time is banked while the draw is open.
+	private const float UnidentifiedSiteFinishedFraction = 0f;
 	private const float UnderAttackAlertCooldownSeconds = 8f;
 	private const float BaseRevivalSeconds = 12f;
 	private const float RevivalSecondsPerDeath = 3f;
@@ -1635,9 +1634,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	/// <summary>
 	///     Opens the draw on the site the player just placed. The site is unidentified at this point: it stands where the
-	///     placement order put it, it can be laboured at, and it is held one percent short of completion until a package is
-	///     locked, so nothing can rise there that the player did not choose. The packages appear in the site's command grid,
-	///     and the site itself states what the deck reserved for it, which is how an opponent reads the reservation.
+	///     placement order put it and it takes no work at all until a package is locked, so nothing can rise there that the
+	///     player did not choose and no work is banked while the choice is still open. The packages appear in the site's
+	///     command grid, and the site itself states what the deck reserved for it, which is how an opponent reads the
+	///     reservation.
 	/// </summary>
 	/// <param name="site">The uncommitted site the player placed.</param>
 	private void BeginConstruction(UnitId site)
@@ -1678,10 +1678,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_api.SetUnitCommandsFrozen(site, true);
 		_api.SetUnitRepairable(site, true);
 
-		// The site needs work before it is identified, and it is held short of completion while the draw is open, so a
-		// player may labour it up to the gate without ever finishing a building they have not chosen.
+		// The site needs work before it is identified, and it takes none while the draw is open, so a player cannot pre-build
+		// a building they have not chosen and the work starts from nothing once they do.
 		_api.StartUnitConstruction(site, SiteConstructionSeconds);
-		_api.SetUnitConstructionCeiling(site, SiteHeldFinishedFraction);
+		_api.SetUnitConstructionCeiling(site, UnidentifiedSiteFinishedFraction);
 
 		_draftOpen[playerIndex] = 1;
 		_draftOptionCounts[playerIndex] = optionCount;
@@ -1699,6 +1699,35 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		Say(player, "{0} building(s) are offered. Pick one from the command grid, or abandon the construction.", new Vector3(0.85f, 0.9f, 0.6f), optionCount.ToString(CultureInfo.InvariantCulture));
 		_api.SpawnExpandingGroundRing(new Vector3(sitePosition.X, 0f, sitePosition.Z), 3f, 6f, 0.6f, new Vector3(0.9f, 0.8f, 0.4f));
+	}
+
+	/// <summary>
+	///     Sends the hero to a site the player has just committed to, but only when the hero has nothing else to do. A player
+	///     who was waiting on the draw has nothing left to click, while a hero already fighting, gathering or raising another
+	///     site keeps the order it was given.
+	/// </summary>
+	/// <param name="playerIndex">The player whose choice was just locked.</param>
+	/// <param name="site">The revealed site the hero is being sent to.</param>
+	private void OrderIdleHeroToSite(int playerIndex, UnitId site)
+	{
+		if (!site.IsValid || site.IsDead) return;
+
+		int heroEntityId = _heroEntities[playerIndex];
+		if (heroEntityId <= 0) return;
+
+		ReadOnlySpan<UnitId> idleUnits = _api.GetIdleUnitsOwnedByPlayer(playerIndex);
+		bool heroIsIdle = false;
+		for (int index = 0; index < idleUnits.Length; index++)
+		{
+			if (idleUnits[index].UniqueId != heroEntityId) continue;
+
+			heroIsIdle = true;
+			break;
+		}
+
+		if (!heroIsIdle) return;
+
+		_api.IssueRepairOrder(new UnitId(heroEntityId), site);
 	}
 
 	/// <summary>
@@ -1999,9 +2028,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 	/// <summary>
 	///     Locks the building a player cast from its command grid. The site the draw stands on becomes that building: it
-	///     takes its template, so every screen draws its silhouette from then on, and keeps the work it has been given
-	///     rather than paying for that work twice. The deck entry leaves the shared deck here rather than when it was drawn,
-	///     so an option the player declined stays available to everybody else.
+	///     takes its template, so every screen draws its silhouette from then on, and it starts taking the building's own
+	///     work, since an uncommitted site never banked any. A hero that was idle when the choice was locked is sent to the
+	///     site immediately. The deck entry leaves the shared deck here rather than when it was drawn, so an option the player
+	///     declined stays available to everybody else.
 	/// </summary>
 	private void LockDraftOption(int playerIndex, string buildingTemplateId)
 	{
@@ -2046,6 +2076,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		_api.SetUnitConstructionCeiling(site, 1f);
 		_api.SetUnitMana(site, 0f);
 		ClearReservation(_api, site);
+		OrderIdleHeroToSite(playerIndex, site);
 
 		// The package leaves the shared deck only once its building actually stands, so a placement the map had to
 		// refuse does not cost the deck one of its nine buildings for the rest of the match.
@@ -2053,8 +2084,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		ApplyDraftAbilityState(_api, playerIndex);
 
-		// A site is raised by the hero working at it, never by the site existing near the hero. Nothing is ordered here, so
-		// the player right-clicks the site to send the hero to raise it, and walking away stops the work where it stood.
+		// A site is raised by the hero working at it, never by the site existing near the hero. A hero that was waiting on
+		// the draw has already been sent to it, and a hero doing something else keeps that order, so the player right-clicks
+		// the site to send the hero to raise it and walking away stops the work where it stood.
 		Say(player, "{0} is under construction. Right-click the site to raise it.", new Vector3(0.85f, 0.9f, 0.6f), _api.GetUnitName(buildingTemplateId));
 		player.PlayClickSound();
 	}
