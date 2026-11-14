@@ -455,6 +455,14 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		// count the player never sees.
 		api.SetPlayerBuildingLimit(playerIndex, _maximumBuildingsPerPlayer + 2);
 
+		// A board that declares no anchors is one this ruleset does not seat. The engine answers a point on the board anyway,
+		// because a map is free to place its players itself, so the absence is read from the count rather than from the point.
+		if (api.GetSpawnAnchorCount() == 0)
+		{
+			Say(player, "This board has no ground to seat a player on.", new Vector3(1f, 0.4f, 0.3f));
+			return;
+		}
+
 		Vector3 spawnAnchor = api.GetSpawnAnchor(playerIndex);
 		if (spawnAnchor == Vector3.Zero)
 		{
@@ -1653,20 +1661,23 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		PlayerId player = _api.GetPlayer(playerIndex);
 		if (!player.IsActive)
 		{
-			RetireUnansweredSite(playerIndex, site);
+			RefundUnansweredSite(player, playerIndex, site);
 			return;
 		}
 
 		if (_draftOpen[playerIndex] != 0)
 		{
-			RetireUnansweredSite(playerIndex, site);
+			RefundUnansweredSite(player, playerIndex, site);
 			Say(player, "Choose from the buildings already offered.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
 
-		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer)
+		// The count this reads already holds the site that was just placed and the Nexus that was there before it, so a
+		// player holding every building they may have still draws: the site is the last one they are allowed, not one too
+		// many.
+		if (_api.GetPlayerBuildingCount(playerIndex) > _maximumBuildingsPerPlayer + 1)
 		{
-			RetireUnansweredSite(playerIndex, site);
+			RefundUnansweredSite(player, playerIndex, site);
 			Say(player, "All {0} building locations are taken.", new Vector3(1f, 0.7f, 0.3f), _maximumBuildingsPerPlayer.ToString(CultureInfo.InvariantCulture));
 			return;
 		}
@@ -1674,7 +1685,7 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		int optionCount = DrawDraftOptions(playerIndex);
 		if (optionCount == 0)
 		{
-			RetireUnansweredSite(playerIndex, site);
+			RefundUnansweredSite(player, playerIndex, site);
 			Say(player, "No building is left to draw.", new Vector3(1f, 0.7f, 0.3f));
 			return;
 		}
@@ -1741,12 +1752,35 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	/// </summary>
 	/// <param name="playerIndex">The player whose placement is being refused.</param>
 	/// <param name="site">The site to remove.</param>
+	/// <summary>
+	///     Gives back the wood a refused placement charged and takes the site away. The placement paid for the site before
+	///     this map saw it, so a draw it will not open has to cost the player nothing.
+	/// </summary>
+	/// <param name="player">The player whose wood is returned.</param>
+	/// <param name="playerIndex">The player's slot.</param>
+	/// <param name="site">The site the refused draw was placed on.</param>
+	private void RefundUnansweredSite(PlayerId player, int playerIndex, UnitId site)
+	{
+		player.AdjustWood(BuildingWoodCost);
+		RetireUnansweredSite(playerIndex, site);
+	}
+
 	private void RetireUnansweredSite(int playerIndex, UnitId site)
 	{
 		if (playerIndex <= 0 || playerIndex >= EcsSharedMemory.MAX_PLAYERS) return;
 		if (!site.IsValid) return;
 
 		_draftSiteRetirements[playerIndex] = site.UniqueId;
+
+		// The site is taken away on the following update, because it is still the caster of the ability being answered right
+		// now. Until then it offers nothing: a draw that was refused must not be readable for a tick, or a player watching
+		// the grid would see packages for a construction that no longer exists.
+		for (int index = 0; index < SoldierProfiles.Length; index++)
+		{
+			_api.SetAbilityState(site, SoldierProfiles[index].BuildingTemplateId, true, true);
+		}
+
+		_api.SetAbilityState(site, AbandonConstructionAbilityId, true, true);
 	}
 
 	/// <summary>

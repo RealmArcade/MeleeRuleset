@@ -31,6 +31,7 @@
     "Units": [
       {
         "TemplateID": "hero/vale",
+        "MaxLevel": 6,
         "Name": "Vale, the Lineholder",
         "Description": "Durable frontline commander. Innate Unbroken: Vale and every owned unit carry +6 armor and +10% tenacity, always active.",
         "MaxHp": 900,
@@ -89,6 +90,7 @@
       },
       {
         "TemplateID": "hero/sable",
+        "MaxLevel": 6,
         "Name": "Sable, the Ashcaller",
         "Description": "Ranged area-damage spellcaster. Innate Cinder Mark: Sable's abilities and every owned unit's attacks burn for 6 magic damage a second for 2 seconds.",
         "MaxHp": 700,
@@ -147,6 +149,7 @@
       },
       {
         "TemplateID": "hero/corvus",
+        "MaxLevel": 6,
         "Name": "Corvus, the Quartermaster",
         "Description": "Economy and tempo strategist. Innate Standing Ledger: every owned soldier-granting building stores one more production worth of mana, always active.",
         "MaxHp": 800,
