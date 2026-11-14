@@ -29,6 +29,18 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const int ManaPerProduction = 100;
 	private const int DefaultDraftOptionCount = 3;
 	private const int MaximumDraftOptions = 24;
+
+	// The identifiers this ruleset declares its own match settings under. They are this map's numbers alone: the engine
+	// only carries the values, and another map is free to declare completely different settings beside them.
+	private const int LobbySettingDraftOptions = 1;
+	private const int LobbySettingBuildingSupply = 2;
+	private const int LobbySettingBuildingCopies = 3;
+	private const int LobbySettingCapacityPercent = 4;
+	private const int LobbySettingProductionPercent = 5;
+	private const int LobbySettingMirroredDraft = 6;
+	private const int LobbySettingOpenPoolDrafting = 7;
+	private const int MinimumMultiplierPercent = 10;
+	private const int MaximumMultiplierPercent = 1000;
 	private const int DraftRow = 2;
 	private const int DraftAbandonSlot = 3;
 	private const int MaximumPopulation = 8;
@@ -426,15 +438,31 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		// Melee is played with the whole board in view: a host who wants vision limited can still choose it, but the
 		// board itself does not hide anything from the players fighting on it.
-		api.SetShroudModeDefault(MatchShroudMode.Revealed);
+		api.SetShroudModeDefault(MatchShroudMode.None);
 
 		// A melee lobby seats eight players, which is the width its board and its building supply are authored for.
-		api.SetMaximumPlayerCount(MeleeSeatCount);
+		api.SetOpenSlotCount(MeleeSeatCount);
 
-		// The two draft switches belong to the auto-battler deck this ruleset does not play with: every player builds the
-		// same way from the same shared deck, so the lobby does not offer them.
-		api.SetMatchSettingHidden(LobbySetting.MirroredAutoDraft, true);
-		api.SetMatchSettingHidden(LobbySetting.OpenPoolDrafting, true);
+		// The rules this ruleset plays with and no other map has: how wide a build is offered, how many locations a player
+		// may hold and how many copies of one building may stand, how much capacity and stored production those buildings
+		// carry, and whether every player draws from the same deck or from the shared pool.
+		api.AddMatchSetting(LobbySettingDraftOptions, LobbySettingControl.Count, "Building options per draft", "How many building options a build offers at once.", DefaultDraftOptionCount);
+		api.SetMatchSettingRange(LobbySettingDraftOptions, 1, MaximumDraftOptions);
+
+		api.AddMatchSetting(LobbySettingBuildingSupply, LobbySettingControl.Count, "Building supply", "How many buildings a player may construct and hold.", DefaultMaximumBuildingsPerPlayer);
+		api.SetMatchSettingRange(LobbySettingBuildingSupply, 1, MaximumBuildingLimit);
+
+		api.AddMatchSetting(LobbySettingBuildingCopies, LobbySettingControl.Count, "Copies of one building", "How many unique instances of one building a player may own.", DefaultMaximumBuildingCopiesPerPlayer);
+		api.SetMatchSettingRange(LobbySettingBuildingCopies, 1, MaximumBuildingLimit);
+
+		api.AddMatchSetting(LobbySettingCapacityPercent, LobbySettingControl.Count, "Capacity multiplier (%)", "The percentage every building's soldier capacity is multiplied by.", 100);
+		api.SetMatchSettingRange(LobbySettingCapacityPercent, MinimumMultiplierPercent, MaximumMultiplierPercent);
+
+		api.AddMatchSetting(LobbySettingProductionPercent, LobbySettingControl.Count, "Production multiplier (%)", "The percentage every building's stored production is multiplied by.", 100);
+		api.SetMatchSettingRange(LobbySettingProductionPercent, MinimumMultiplierPercent, MaximumMultiplierPercent);
+
+		api.AddMatchSetting(LobbySettingMirroredDraft, LobbySettingControl.Toggle, "Mirrored draft", "Every player draws the same buildings, which removes draft asymmetry.", 0);
+		api.AddMatchSetting(LobbySettingOpenPoolDrafting, LobbySettingControl.Toggle, "Open pool drafting", "Drafted buildings stay in the deck instead of leaving it, so the same building can be drafted again.", 0);
 
 		for (int slot = 1; slot <= api.SlotCount; slot++)
 		{
@@ -1830,31 +1858,31 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	}
 
 	/// <summary>
-	///     Reads the parameters the lobby's host configured for this match, so a host can seat more players, offer more or
-	///     fewer building options per draw, allow more copies of one building, multiply capacity and stored productions, and switch on
-	///     mirrored drafting or an open building pool. Every one of them falls back to the value this ruleset states, which
-	///     is what a lobby that touched nothing plays.
+	///     Reads the values the lobby's host chose for the settings this ruleset declared, so a host can offer more or fewer
+	///     building options per build, allow more copies of one building, multiply capacity and stored productions, and
+	///     switch on mirrored drafting or an open building pool. Every one of them falls back to the value this ruleset
+	///     states, which is what a match whose lobby holds no value for it plays.
 	/// </summary>
 	/// <param name="api">The game API the match runs through.</param>
 	private void ReadMatchOptions(IGameAPI api)
 	{
-		int draftOptions = api.GetMatchOption(MatchOption.MaximumBuildingDraftCount);
+		int draftOptions = api.GetLobbySetting(LobbySettingDraftOptions);
 		_draftOptionsPerDraw = draftOptions > 0 ? Math.Clamp(draftOptions, 1, MaximumDraftOptions) : DefaultDraftOptionCount;
 
-		int buildingSupply = api.GetMatchOption(MatchOption.MaximumBuildingSupply);
+		int buildingSupply = api.GetLobbySetting(LobbySettingBuildingSupply);
 		_maximumBuildingsPerPlayer = buildingSupply > 0 ? Math.Clamp(buildingSupply, 1, MaximumBuildingLimit) : DefaultMaximumBuildingsPerPlayer;
 
-		int buildingCopies = api.GetMatchOption(MatchOption.MaximumUniqueBuildingInstances);
+		int buildingCopies = api.GetLobbySetting(LobbySettingBuildingCopies);
 		_maximumBuildingCopiesPerPlayer = buildingCopies > 0 ? Math.Clamp(buildingCopies, 1, MaximumBuildingLimit) : DefaultMaximumBuildingCopiesPerPlayer;
 
-		int capacityPercent = api.GetMatchOption(MatchOption.CapacityMultiplierPercent);
+		int capacityPercent = api.GetLobbySetting(LobbySettingCapacityPercent);
 		_capacityMultiplier = capacityPercent > 0 ? capacityPercent / 100f : 1f;
 
-		int productionPercent = api.GetMatchOption(MatchOption.ProductionMultiplierPercent);
+		int productionPercent = api.GetLobbySetting(LobbySettingProductionPercent);
 		_rechargeMultiplier = productionPercent > 0 ? productionPercent / 100f : 1f;
 
-		_mirroredDraft = api.GetMatchOption(MatchOption.MirroredAutoDraft) != 0;
-		_openPoolDrafting = api.GetMatchOption(MatchOption.OpenPoolDrafting) != 0;
+		_mirroredDraft = api.GetLobbySetting(LobbySettingMirroredDraft) != 0;
+		_openPoolDrafting = api.GetLobbySetting(LobbySettingOpenPoolDrafting) != 0;
 	}
 
 	/// <summary>
