@@ -420,6 +420,10 @@ public partial class MapScript : IWasmModule, ILobbyScript
 		api.SetTeamCount(2);
 		api.SetTeamsTogetherDefault(true);
 
+		// Melee is played with the whole board in view: a host who wants vision limited can still choose it, but the
+		// board itself does not hide anything from the players fighting on it.
+		api.SetShroudModeDefault(MatchShroudMode.Revealed);
+
 		for (int slot = 1; slot <= api.SlotCount; slot++)
 		{
 			if (!api.IsOccupied(slot)) continue;
