@@ -13,6 +13,9 @@ public partial class MapScript : IWasmModule, ILobbyScript
 	private const string WoodNodeTemplateId = "resource/melee_woodland";
 
 	private const int DefaultMaximumBuildingsPerPlayer = 8;
+
+	/// <summary>The players a melee lobby seats, which is the width its board and its building supply are authored for.</summary>
+	private const int MeleeSeatCount = 8;
 	private const int DefaultMaximumBuildingCopiesPerPlayer = 1;
 	private const int MaximumBuildingLimit = 24;
 	private const string ConstructionAbilityId = "ability/begin_construction";
@@ -419,10 +422,19 @@ public partial class MapScript : IWasmModule, ILobbyScript
 
 		api.SetTeamCount(2);
 		api.SetTeamsTogetherDefault(true);
+		api.SetSpectatorDelayDefault(true);
 
 		// Melee is played with the whole board in view: a host who wants vision limited can still choose it, but the
 		// board itself does not hide anything from the players fighting on it.
 		api.SetShroudModeDefault(MatchShroudMode.Revealed);
+
+		// A melee lobby seats eight players, which is the width its board and its building supply are authored for.
+		api.SetMaximumPlayerCount(MeleeSeatCount);
+
+		// The two draft switches belong to the auto-battler deck this ruleset does not play with: every player builds the
+		// same way from the same shared deck, so the lobby does not offer them.
+		api.SetMatchSettingHidden(LobbySetting.MirroredAutoDraft, true);
+		api.SetMatchSettingHidden(LobbySetting.OpenPoolDrafting, true);
 
 		for (int slot = 1; slot <= api.SlotCount; slot++)
 		{
